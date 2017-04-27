@@ -43,7 +43,7 @@ func WithJSONMarshaler() Option {
 	const name = "marshaler"
 	return &option{
 		name:  name,
-		value: &JSONMarshaler{},
+		value: marshalFunc(jsonMarshal),
 	}
 }
 
@@ -51,7 +51,7 @@ func WithMsgpackMarshaler() Option {
 	const name = "marshaler"
 	return &option{
 		name:  name,
-		value: &MsgpackMarshaler{},
+		value: marshalFunc(msgpackMarshal),
 	}
 }
 

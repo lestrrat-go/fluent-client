@@ -12,7 +12,6 @@ func New(options ...Option) (*Client, error) {
 		address:     "127.0.0.1:24224",
 		bufferLimit: 8 * 1024 * 1024,
 		dialTimeout: 3 * time.Second,
-		marshaler:   &MsgpackMarshaler{},
 		network:     "tcp",
 	}
 
@@ -31,7 +30,7 @@ func New(options ...Option) (*Client, error) {
 		case "dialTimeout":
 			c.dialTimeout = opt.Value().(time.Duration)
 		case "marshaler":
-			c.marshaler = opt.Value().(Marshaler)
+			c.marshaler = opt.Value().(marshaler)
 		case "tag_prefix":
 			c.tagPrefix = opt.Value().(string)
 		}
@@ -64,7 +63,7 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 			t = opt.Value().(time.Time)
 		}
 	}
-	buf, err := c.marshaler.Marshal(tag, t.Unix(), v)
+	buf, err := c.marshaler.Marshal(tag, t.Unix(), v, nil)
 	if err != nil {
 		return errors.Wrap(err, `failed to marshal payload`)
 	}

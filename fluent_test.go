@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,101 +13,181 @@ import (
 	"time"
 
 	fluent "github.com/lestrrat/go-fluent-client"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	msgpack "gopkg.in/vmihailenco/msgpack.v2"
 )
 
-func TestPost(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+// to hell with race-conditions. no locking!
+type server struct {
+	cleanup  func()
+	done     chan struct{}
+	listener net.Listener
+	ready    chan struct{}
+	useJSON  bool
+	Network  string
+	Address  string
+	Payload  []*fluent.Message
+}
 
+func newServer(useJSON bool) (*server, error) {
 	dir, err := ioutil.TempDir("", "sock-")
-	if !assert.NoError(t, err, "created temporary dir") {
-		return
+	if err != nil {
+		return nil, errors.Wrap(err, `failed to create temporary directory`)
 	}
-	defer os.RemoveAll(dir)
 
-	file := filepath.Join(dir, "TestPost.sock")
+	file := filepath.Join(dir, "test-server.sock")
 
 	l, err := net.Listen("unix", file)
-	if !assert.NoError(t, err, "listen to unix socket") {
-		return
+	if err != nil {
+		return nil, errors.Wrap(err, `failed to listen to unix socket`)
 	}
 
-	serverDone := make(chan struct{})
-	serverReady := make(chan struct{})
-	r := make(chan []byte)
-	go func() {
-		defer close(r)
-		defer close(serverDone)
-		var once sync.Once
+	s := &server{
+		Network:  "unix",
+		Address:  file,
+		useJSON:  useJSON,
+		done:     make(chan struct{}),
+		ready:    make(chan struct{}),
+		listener: l,
+		cleanup: func() {
+			l.Close()
+			os.RemoveAll(dir)
+		},
+	}
+	return s, nil
+}
+
+func (s *server) Close() error {
+	if f := s.cleanup; f != nil {
+		f()
+	}
+	return nil
+}
+
+func (s *server) Ready() <-chan struct{} {
+	return s.ready
+}
+
+func (s *server) Done() <-chan struct{} {
+	return s.done
+}
+
+func (s *server) Run(ctx context.Context) {
+	defer close(s.done)
+
+	var once sync.Once
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		once.Do(func() { close(s.ready) })
+		conn, err := s.listener.Accept()
+		if err != nil {
+			return
+		}
+
+		var dec func(interface{}) error
+		if s.useJSON {
+			dec = json.NewDecoder(conn).Decode
+		} else {
+			msgpdec := msgpack.NewDecoder(conn)
+			dec = func(v interface{}) error {
+				return msgpdec.Decode(v)
+			}
+		}
+
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-
-			once.Do(func() { close(serverReady) })
-			conn, err := l.Accept()
-			if err != nil {
-				t.Logf("Failed to accept: %s", err)
+			conn.SetReadDeadline(time.Now().Add(time.Second))
+			var v fluent.Message
+			if err := dec(&v); err != nil {
+				log.Printf("failed to decode: %s", err)
 				return
 			}
 
-			for {
-				conn.SetReadDeadline(time.Now().Add(time.Second))
-				var v []interface{}
-				if err := json.NewDecoder(conn).Decode(&v); err != nil {
+			// This is some silly stuff, but msgpack would return
+			// us map[interface{}]interface{} instead of map[string]interface{}
+			// we force the usage of map[string]interface here, so testing is easier
+			switch v.Record.(type) {
+			case map[interface{}]interface{}:
+				newMap := map[string]interface{}{}
+				for key, val := range v.Record.(map[interface{}]interface{}) {
+					newMap[key.(string)] = val
+				}
+				v.Record = newMap
+			}
+			s.Payload = append(s.Payload, &v)
+		}
+	}
+}
+
+func TestPostRoundtrip(t *testing.T) {
+	var testcases = []map[string]interface{}{
+		map[string]interface{}{"foo": "bar"},
+		map[string]interface{}{"fuga": "bar", "hoge": "fuga"},
+	}
+
+	for _, marshalerName := range []string{"json", "msgpack"} {
+		var marshaler fluent.Option
+		var useJSON bool
+		switch marshalerName {
+		case "json":
+			useJSON = true
+			marshaler = fluent.WithJSONMarshaler()
+		case "msgpack":
+			marshaler = fluent.WithMsgpackMarshaler()
+		}
+
+		t.Run("marshaler="+marshalerName, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			s, err := newServer(useJSON)
+			if !assert.NoError(t, err, "newServer should succeed") {
+				return
+			}
+			defer s.Close()
+			go s.Run(ctx)
+
+			<-s.Ready()
+
+			client, err := fluent.New(
+				fluent.WithNetwork(s.Network),
+				fluent.WithAddress(s.Address),
+				marshaler,
+			)
+			if !assert.NoError(t, err, "failed to create fluent client") {
+				return
+			}
+			defer client.Shutdown(nil)
+
+			for _, data := range testcases {
+				err := client.Post("tag_name", data, fluent.WithTimestamp(time.Unix(1482493046, 0)))
+				if !assert.NoError(t, err, "client.Post should succeed") {
 					return
 				}
-				buf, _ := json.Marshal(v)
-				r <- buf
 			}
-		}
-	}()
 
-	<-serverReady
-	client, err := fluent.New(
-		fluent.WithNetwork("unix"),
-		fluent.WithAddress(file),
-		fluent.WithJSONMarshaler(),
-	)
-	if !assert.NoError(t, err, "failed to create fluent client") {
-		return
-	}
-	defer client.Shutdown(nil)
+			time.Sleep(time.Second)
+			if !assert.Len(t, s.Payload, len(testcases)) {
+				return
+			}
 
-	var testcases = []struct {
-		in  map[string]string
-		out string
-	}{
-		{
-			map[string]string{"foo": "bar"},
-			`["tag_name",1482493046,{"foo":"bar"},null]`,
-		},
-		{
-			map[string]string{"fuga": "bar", "hoge": "fuga"},
-			`["tag_name",1482493046,{"fuga":"bar","hoge":"fuga"},null]`,
-		},
-	}
+			for i, data := range testcases {
+				if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: 1482493046, Record: data}, s.Payload[i]) {
+					return
+				}
+			}
 
-	for _, data := range testcases {
-		err := client.Post("tag_name", data.in, fluent.WithTimestamp(time.Unix(1482493046, 0)))
-		if !assert.NoError(t, err, "client.Post should succeed") {
-			return
-		}
-
-		if !assert.Equal(t, data.out, string(<-r)) {
-			return
-		}
-	}
-	client.Shutdown(nil)
-	l.Close()
-
-	select {
-	case <-ctx.Done():
-		t.Logf("context canceled: %s", ctx.Err())
-	case <-serverDone:
-		t.Logf("server exited")
+			select {
+			case <-ctx.Done():
+				t.Logf("context canceled: %s", ctx.Err())
+			case <-s.Done():
+				t.Logf("server exited")
+			}
+		})
 	}
 }

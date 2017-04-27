@@ -2,7 +2,6 @@ package fluent
 
 import (
 	"context"
-	"log"
 	"net"
 	"sync"
 	"time"

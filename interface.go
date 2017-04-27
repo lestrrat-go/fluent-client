@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+type marshaler interface {
+	Marshal(string, int64, interface{}, interface{}) ([]byte, error)
+}
+
+type marshalFunc func(string, int64, interface{}, interface{}) ([]byte, error)
+
+func (f marshalFunc) Marshal(tag string, t int64, record, option interface{}) ([]byte, error) {
+	return f(tag, t, record, option)
+}
+
 // Client represents a fluentd client. The client receives data as we go,
 // and proxies it to a background writer. The background writer attempts to
 // write to the server as soon as possible
@@ -13,7 +23,7 @@ type Client struct {
 	bufferSize   int
 	bufferLimit  int
 	dialTimeout  time.Duration // max time to wait when connecting
-	marshaler    Marshaler
+	marshaler    marshaler
 	muBufsize    sync.RWMutex
 	muWriter     sync.Mutex
 	network      string // tcp or unix
@@ -28,9 +38,11 @@ type Option interface {
 	Value() interface{}
 }
 
-type Marshaler interface {
-	Marshal(string, int64, interface{}) ([]byte, error)
+// Message is a fluentd's payload, which can be encoded in JSON or MessagePack
+// format.
+type Message struct {
+	Tag    string      `msgpack:"tag"`
+	Time   int64       `msgpack:"time"`
+	Record interface{} `msgpack:"record"`
+	Option interface{} `msgpack:"option"`
 }
-
-type JSONMarshaler struct{}
-type MsgpackMarshaler struct{}
