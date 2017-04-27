@@ -49,13 +49,18 @@ func (c *Client) updateBufsize(v int) {
 // Post posts the given structure after encoding it along with the given
 // tag. If the current underlying pending buffer is not enough to hold
 // this new data, an error will be returned
+//
+// If you would like to specify options, you may pass them at the end of
+// the method. Currently you can use the following:
+//
+// fluent.WithTimestamp: allows you to set arbitrary timestamp values
 func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 	c.startWriter()
 
 	if p := c.tagPrefix; len(p) > 0 {
 		tag = p + "." + tag
 	}
-		
+
 	t := time.Now()
 	for _, opt := range options {
 		switch opt.Name() {
@@ -84,6 +89,20 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 	c.writerQueue <- buf
 	c.muWriter.Unlock()
 
+	return nil
+}
+
+// Close closes the connection, but does not wait for the pending buffers
+// to be flushed. If you want to make sure that background writer has properly
+// exited, you should probably use the Shutdown() method
+func (c *Client) Close() error {
+	c.muWriter.Lock()
+	defer c.muWriter.Unlock()
+	if c.writerCancel == nil {
+		return nil
+	}
+	c.writerCancel()
+	c.writerCancel = nil
 	return nil
 }
 
