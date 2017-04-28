@@ -10,7 +10,7 @@ type marshaler interface {
 }
 
 // Client represents a fluentd client. The client receives data as we go,
-// and proxies it to a background minon. The background minion attempts to
+// and proxies it to a background minion. The background minion attempts to
 // write to the server as soon as possible
 type Client struct {
 	address      string // network address (host:port) or socket path
