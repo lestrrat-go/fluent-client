@@ -9,6 +9,12 @@ import (
 	msgpack "gopkg.in/vmihailenco/msgpack.v2"
 )
 
+type marshalFunc func(string, int64, interface{}, interface{}) ([]byte, error)
+
+func (f marshalFunc) Marshal(tag string, t int64, record, option interface{}) ([]byte, error) {
+	return f(tag, t, record, option)
+}
+
 func (m *Message) UnmarshalJSON(buf []byte) error {
 	var l []json.RawMessage
 	if err := json.Unmarshal(buf, &l); err != nil {
@@ -71,6 +77,60 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 	buf.WriteByte(']')
 
 	return buf.Bytes(), nil
+}
+
+func (m *Message) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if err := enc.EncodeArrayLen(4); err != nil {
+		return errors.Wrap(err, `failed to encode msgpack: array len`)
+	}
+	if err := enc.EncodeString(m.Tag); err != nil {
+		return errors.Wrap(err, `failed to encode msgpack: tag`)
+	}
+
+	if err := enc.EncodeInt64(m.Time); err != nil {
+		return errors.Wrap(err, `failed to encode msgpack: time`)
+	}
+
+	if err := enc.Encode(m.Record); err != nil {
+		return errors.Wrap(err, `failed to encode msgpack: record`)
+	}
+	if err := enc.Encode(m.Option); err != nil {
+		return errors.Wrap(err, `failed to encode msgpack: option`)
+	}
+	return nil
+}
+
+func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
+	l, err := dec.DecodeArrayLen()
+	if err != nil {
+		return errors.Wrap(err, `failed to decode msgpack: array len`)
+	}
+
+	if l != 4 {
+		return errors.Errorf(`expected tuple with 4 elements, got %d`, l)
+	}
+
+	m.Tag, err = dec.DecodeString()
+	if err != nil {
+		return errors.Wrap(err, `failed to decode msgpack: tag`)
+	}
+
+	m.Time, err = dec.DecodeInt64()
+	if err != nil {
+		return errors.Wrap(err, `failed to decode msgpack: time`)
+	}
+
+	m.Record, err = dec.DecodeInterface()
+	if err != nil {
+		return errors.Wrap(err, `failed to decode msgpack: record`)
+	}
+
+	m.Option, err = dec.DecodeInterface()
+	if err != nil {
+		return errors.Wrap(err, `failed to decode msgpack: option`)
+	}
+
+	return nil
 }
 
 func msgpackMarshal(tag string, t int64, record, option interface{}) ([]byte, error) {

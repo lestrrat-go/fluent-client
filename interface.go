@@ -9,12 +9,6 @@ type marshaler interface {
 	Marshal(string, int64, interface{}, interface{}) ([]byte, error)
 }
 
-type marshalFunc func(string, int64, interface{}, interface{}) ([]byte, error)
-
-func (f marshalFunc) Marshal(tag string, t int64, record, option interface{}) ([]byte, error) {
-	return f(tag, t, record, option)
-}
-
 // Client represents a fluentd client. The client receives data as we go,
 // and proxies it to a background writer. The background writer attempts to
 // write to the server as soon as possible

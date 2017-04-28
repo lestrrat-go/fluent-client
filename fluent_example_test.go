@@ -14,7 +14,7 @@ func Example() {
 	//
 	//   client, err := fluent.New(fluent.WithAddress("fluent.example.com"))
 	//
-	client, err := fluent.New(fluent.WithJSONMarshaler())
+	client, err := fluent.New()
 	if err != nil {
 		// fluent.New may return an error if invalid values were
 		// passed to the constructor
