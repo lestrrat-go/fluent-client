@@ -48,7 +48,7 @@ type minion struct {
 	flush         bool
 	incoming      chan []byte
 	muFlush       sync.RWMutex
-	muPending     sync.Mutex
+	muPending     sync.RWMutex
 	network       string
 	pending       []byte
 	updateBufsize func(int)
@@ -139,18 +139,26 @@ func (m *minion) runWriter(ctx context.Context) {
 		}
 
 		m.cond.L.Lock()
-		for len(m.pending) == 0 {
+		for {
+			m.muPending.RLock()
+			pendingLen := len(m.pending)
+			m.muPending.RUnlock()
+			if pendingLen > 0 {
+				if pdebug.Enabled {
+					pdebug.Printf("background writer: %d bytes to write", pendingLen)
+				}
+				break
+			}
+
 			select {
 			case <-ctx.Done():
 				return
 			default:
 			}
+
 			m.cond.Wait()
 		}
 		m.cond.L.Unlock()
-		if pdebug.Enabled {
-			pdebug.Printf("background writer: %d bytes to write", len(m.pending))
-		}
 
 		// if we're not connected, we should do that now.
 		// there are two cases where we can get to this point.
@@ -221,6 +229,9 @@ func (m *minion) runWriter(ctx context.Context) {
 		} else {
 			m.updateBufsize(len(m.pending) - n)
 			m.pending = m.pending[n:]
+			if pdebug.Enabled {
+				pdebug.Printf("%d more bytes to write", len(m.pending))
+			}
 		}
 		m.muPending.Unlock()
 	}

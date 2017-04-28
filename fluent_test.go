@@ -3,6 +3,7 @@ package fluent_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	fluent "github.com/lestrrat/go-fluent-client"
+	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	msgpack "gopkg.in/vmihailenco/msgpack.v2"
@@ -74,6 +76,7 @@ func (s *server) Done() <-chan struct{} {
 }
 
 func (s *server) Run(ctx context.Context) {
+	defer pdebug.Printf("bail out of server.Run")
 	defer close(s.done)
 
 	var once sync.Once
@@ -100,12 +103,39 @@ func (s *server) Run(ctx context.Context) {
 			}
 		}
 
+		readerCh := make(chan *fluent.Message)
+		go func(ch chan *fluent.Message) {
+			for {
+				conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+				var v fluent.Message
+				if err := dec(&v); err != nil {
+					var decName string
+					if s.useJSON {
+						decName = "json"
+					} else {
+						decName = "msgpack"
+					}
+					log.Printf("failed to decode %s: %s", decName, err)
+					if errors.Cause(err) == io.EOF {
+						return
+					}
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- &v:
+				}
+			}
+		}(readerCh)
+
 		for {
-			conn.SetReadDeadline(time.Now().Add(time.Second))
-			var v fluent.Message
-			if err := dec(&v); err != nil {
-				log.Printf("failed to decode: %s", err)
+			var v *fluent.Message
+			select {
+			case <-ctx.Done():
+				pdebug.Printf("bailout")
 				return
+			case v = <-readerCh:
+				pdebug.Printf("new payload: %#v", v)
 			}
 
 			// This is some silly stuff, but msgpack would return
@@ -119,7 +149,7 @@ func (s *server) Run(ctx context.Context) {
 				}
 				v.Record = newMap
 			}
-			s.Payload = append(s.Payload, &v)
+			s.Payload = append(s.Payload, v)
 		}
 	}
 }
@@ -142,7 +172,8 @@ func TestPostRoundtrip(t *testing.T) {
 		}
 
 		t.Run("marshaler="+marshalerName, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// This is used for global cancel/teardown
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
 			s, err := newServer(useJSON)
@@ -150,7 +181,10 @@ func TestPostRoundtrip(t *testing.T) {
 				return
 			}
 			defer s.Close()
-			go s.Run(ctx)
+
+			// This is just to stop the server
+			sctx, scancel := context.WithCancel(context.Background())
+			go s.Run(sctx)
 
 			<-s.Ready()
 
@@ -172,6 +206,15 @@ func TestPostRoundtrip(t *testing.T) {
 			}
 
 			time.Sleep(time.Second)
+			scancel()
+
+			select {
+			case <-ctx.Done():
+				t.Errorf("context canceled: %s", ctx.Err())
+				return
+			case <-s.Done():
+			}
+
 			if !assert.Len(t, s.Payload, len(testcases)) {
 				return
 			}
@@ -182,12 +225,6 @@ func TestPostRoundtrip(t *testing.T) {
 				}
 			}
 
-			select {
-			case <-ctx.Done():
-				t.Logf("context canceled: %s", ctx.Err())
-			case <-s.Done():
-				t.Logf("server exited")
-			}
 		})
 	}
 }

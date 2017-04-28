@@ -63,9 +63,9 @@ go test -run=none -bench=. -benchmem -tags bench
 ```
 
 ```
-BenchmarkK0kubun-4    	   10000	   1076234 ns/op	    9765 B/op	     129 allocs/op
-BenchmarkLestrrat-4   	   10000	   1251696 ns/op	    4921 B/op	      50 allocs/op
-BenchmarkFluent-4     	   10000	   1363331 ns/op	    9041 B/op	     100 allocs/op
+BenchmarkK0kubun-4    	   10000	    457245 ns/op	    9750 B/op	     129 allocs/op
+BenchmarkLestrrat-4   	   10000	    825743 ns/op	    6040 B/op	      60 allocs/op
+BenchmarkFluent-4     	   10000	    778976 ns/op	    9041 B/op	     100 allocs/op
 PASS
-ok  	github.com/lestrrat/go-fluent-client	36.969s
+ok  	github.com/lestrrat/go-fluent-client	20.673s
 ```

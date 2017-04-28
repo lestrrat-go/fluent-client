@@ -6,16 +6,14 @@ import (
 	"strconv"
 	"sync"
 
-	bufferpool "github.com/lestrrat/go-bufferpool"
+	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
 	msgpack "gopkg.in/vmihailenco/msgpack.v2"
 )
 
-var bufpool *bufferpool.BufferPool
 var msgpool sync.Pool
 
 func init() {
-	bufpool = bufferpool.New()
 	msgpool.New = allocMessage
 }
 
@@ -102,6 +100,10 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 	buf.Write(data)
 	buf.WriteByte(']')
 
+	if pdebug.Enabled {
+		pdebug.Printf("message marshaled to: %s", strconv.Quote(buf.String()))
+	}
+
 	return buf.Bytes(), nil
 }
 
@@ -160,9 +162,7 @@ func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
 }
 
 func msgpackMarshal(tag string, t int64, record, option interface{}) ([]byte, error) {
-	buf := bufpool.Get()
-	defer bufpool.Release(buf)
-
+	var buf bytes.Buffer
 	m := getMessage()
 	defer releaseMessage(m)
 
@@ -170,16 +170,14 @@ func msgpackMarshal(tag string, t int64, record, option interface{}) ([]byte, er
 	m.Time = t
 	m.Record = record
 	m.Option = option
-	if err := msgpack.NewEncoder(buf).Encode(m); err != nil {
+	if err := msgpack.NewEncoder(&buf).Encode(m); err != nil {
 		return nil, errors.Wrap(err, `failed to encode msgpack`)
 	}
 	return buf.Bytes(), nil
 }
 
 func jsonMarshal(tag string, t int64, record, option interface{}) ([]byte, error) {
-	buf := bufpool.Get()
-	defer bufpool.Release(buf)
-
+	var buf bytes.Buffer
 	m := getMessage()
 	defer releaseMessage(m)
 
@@ -187,8 +185,9 @@ func jsonMarshal(tag string, t int64, record, option interface{}) ([]byte, error
 	m.Time = t
 	m.Record = record
 	m.Option = option
-	if err := json.NewEncoder(buf).Encode(m); err != nil {
+	if err := json.NewEncoder(&buf).Encode(m); err != nil {
 		return nil, errors.Wrap(err, `failed to encode json`)
 	}
+	buf.Truncate(buf.Len() - 1) // remove new line
 	return buf.Bytes(), nil
 }
