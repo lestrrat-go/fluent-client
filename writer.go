@@ -9,28 +9,38 @@ import (
 	pdebug "github.com/lestrrat/go-pdebug"
 )
 
-// Starts the background writer.
-func (c *Client) startWriter() {
-	c.muWriter.Lock()
-	defer c.muWriter.Unlock()
-	if c.writerCancel != nil {
-		return
-	}
+// Architecture:
+//
+// The Client passes encoded bytes to a channel where the minion reader
+// is reading from. The minion reader goroutine is responsible for accepting
+// these encoded bytes from the Client as soon as possible, as the Client
+// is being blocked while this is happening. The minion reader appends the
+// new bytes to a "pending" byte slice, and immediately goes back to waiting
+// for new bytes coming in from the client.
+//
+// Meanwhile, a minion writer is woken up by the reader via a sync.Cond.
+// The minion writer checks to see if there are any pending bytes to write
+// to the server. If there's anything, we start the write process
+//
 
-	if pdebug.Enabled {
-		pdebug.Printf("background writer: starting")
+// Starts the background writer.
+func (c *Client) startMinion() {
+	c.muMinion.Lock()
+	defer c.muMinion.Unlock()
+	if c.minionCancel != nil {
+		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	c.writerCancel = cancel
-	writer := newWriter(c)
+	c.minionCancel = cancel
+	m := newMinion(c)
 
-	go writer.runReader(ctx)
-	go writer.runWriter(ctx)
+	go m.runReader(ctx)
+	go m.runWriter(ctx)
 }
 
-type writer struct {
+type minion struct {
 	address       string
 	cond          *sync.Cond
 	dialTimeout   time.Duration
@@ -45,29 +55,29 @@ type writer struct {
 	writeTimeout  time.Duration
 }
 
-func newWriter(c *Client) *writer {
-	var w writer
+func newMinion(c *Client) *minion {
+	var m minion
 
-	w.address = c.address
-	w.cond = sync.NewCond(&sync.Mutex{})
-	w.dialTimeout = c.dialTimeout
-	w.done = make(chan struct{})
+	m.address = c.address
+	m.cond = sync.NewCond(&sync.Mutex{})
+	m.dialTimeout = c.dialTimeout
+	m.done = make(chan struct{})
 	// unbuffered, so the writer knows that immediately upon
 	// write success, we received it
-	w.incoming = make(chan []byte)
-	w.network = c.network
-	w.pending = make([]byte, 0, c.bufferLimit)
-	w.updateBufsize = c.updateBufsize
-	w.writeTimeout = 3 * time.Second
+	m.incoming = make(chan []byte)
+	m.network = c.network
+	m.pending = make([]byte, 0, c.bufferLimit)
+	m.updateBufsize = c.updateBufsize
+	m.writeTimeout = 3 * time.Second
 
 	// Copy relevant data to client
-	c.writerQueue = w.incoming
-	c.writerExit = w.done
+	c.minionQueue = m.incoming
+	c.minionExit = m.done
 
-	return &w
+	return &m
 }
 
-func (w *writer) runReader(ctx context.Context) {
+func (m *minion) runReader(ctx context.Context) {
 	if pdebug.Enabled {
 		pdebug.Printf("background reader: starting")
 		defer pdebug.Printf("background reader: exiting")
@@ -79,32 +89,32 @@ func (w *writer) runReader(ctx context.Context) {
 		case <-ctx.Done():
 			// Wake up the writer goroutine so that it can detect
 			// cancelation
-			w.muFlush.Lock()
-			w.flush = true
-			w.muFlush.Unlock()
+			m.muFlush.Lock()
+			m.flush = true
+			m.muFlush.Unlock()
 
-			w.cond.Broadcast()
+			m.cond.Broadcast()
 			return
-		case data := <-w.incoming:
-			w.muPending.Lock()
+		case data := <-m.incoming:
+			m.muPending.Lock()
 			if pdebug.Enabled {
 				pdebug.Printf("background reader: received %d more bytes, appending", len(data))
 			}
-			w.pending = append(w.pending, data...)
-			w.updateBufsize(len(w.pending))
-			w.muPending.Unlock()
+			m.pending = append(m.pending, data...)
+			m.updateBufsize(len(m.pending))
+			m.muPending.Unlock()
 
 			// Wake up the writer goroutine
-			w.cond.Broadcast()
+			m.cond.Broadcast()
 		}
 	}
 }
 
-func (w *writer) runWriter(ctx context.Context) {
+func (m *minion) runWriter(ctx context.Context) {
 	if pdebug.Enabled {
 		defer pdebug.Printf("background writer: exiting")
 	}
-	defer close(w.done)
+	defer close(m.done)
 
 	// This goroutine waits for the receiver goroutine to wake
 	// it up. When it's awake, we know that there's at least one
@@ -128,18 +138,18 @@ func (w *writer) runWriter(ctx context.Context) {
 		default:
 		}
 
-		w.cond.L.Lock()
-		for len(w.pending) == 0 {
+		m.cond.L.Lock()
+		for len(m.pending) == 0 {
 			select {
 			case <-ctx.Done():
 				return
 			default:
 			}
-			w.cond.Wait()
+			m.cond.Wait()
 		}
-		w.cond.L.Unlock()
+		m.cond.L.Unlock()
 		if pdebug.Enabled {
-			pdebug.Printf("background writer: %d bytes to write", len(w.pending))
+			pdebug.Printf("background writer: %d bytes to write", len(m.pending))
 		}
 
 		// if we're not connected, we should do that now.
@@ -150,9 +160,9 @@ func (w *writer) runWriter(ctx context.Context) {
 		// flush the remaining buffer, without checking the context cancelation
 		// status, otherwise we exit immediately
 
-		w.muFlush.RLock()
-		flush := w.flush
-		w.muFlush.RUnlock()
+		m.muFlush.RLock()
+		flush := m.flush
+		m.muFlush.RUnlock()
 
 		if pdebug.Enabled {
 			if flush {
@@ -164,39 +174,40 @@ func (w *writer) runWriter(ctx context.Context) {
 			var dialer net.Dialer
 			if flush {
 				for conn == nil {
-					conn, _ = dialer.Dial(w.network, w.address)
+					conn, _ = dialer.Dial(m.network, m.address)
 				}
 			} else {
-				connCtx, cancel := context.WithTimeout(ctx, w.dialTimeout)
+				connCtx, cancel := context.WithTimeout(ctx, m.dialTimeout)
 				for conn == nil {
 					select {
 					case <-connCtx.Done():
 						cancel()
 						return
 					default:
-						conn, _ = dialer.DialContext(connCtx, w.network, w.address)
+						conn, _ = dialer.DialContext(connCtx, m.network, m.address)
 					}
 				}
 				cancel()
 			}
 
 			if pdebug.Enabled {
-				pdebug.Printf("background writer: connected to %s:%s", w.network, w.address)
+				pdebug.Printf("background writer: connected to %s:%s", m.network, m.address)
 			}
 		}
 
 		if flush {
 			conn.SetWriteDeadline(time.Time{})
 		} else {
-			conn.SetWriteDeadline(time.Now().Add(w.writeTimeout))
+			conn.SetWriteDeadline(time.Now().Add(m.writeTimeout))
 		}
 
-		w.muPending.Lock()
+		m.muPending.Lock()
 
 		if pdebug.Enabled {
-			pdebug.Printf("background writer: attempting to write %d bytes", len(w.pending))
+			pdebug.Printf("background writer: attempting to write %d bytes", len(m.pending))
 		}
-		n, err := conn.Write(w.pending)
+
+		n, err := conn.Write(m.pending)
 		if pdebug.Enabled {
 			pdebug.Printf("background writer: wrote %d bytes", n)
 		}
@@ -208,9 +219,9 @@ func (w *writer) runWriter(ctx context.Context) {
 			conn.Close()
 			conn = nil
 		} else {
-			w.updateBufsize(0)
-			w.pending = w.pending[:0]
+			m.updateBufsize(len(m.pending)-n)
+			m.pending = m.pending[n:]
 		}
-		w.muPending.Unlock()
+		m.muPending.Unlock()
 	}
 }

@@ -1,3 +1,4 @@
+// Package fluent implements a client for the fluentd data loggin daemon.
 package fluent
 
 import (
@@ -7,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// New creates a new client.
 func New(options ...Option) (*Client, error) {
 	c := &Client{
 		address:     "127.0.0.1:24224",
@@ -40,7 +42,7 @@ func New(options ...Option) (*Client, error) {
 	return c, nil
 }
 
-// called from the writer process
+// called from the minion process
 func (c *Client) updateBufsize(v int) {
 	c.muBufsize.Lock()
 	c.bufferSize = v
@@ -56,7 +58,7 @@ func (c *Client) updateBufsize(v int) {
 //
 // fluent.WithTimestamp: allows you to set arbitrary timestamp values
 func (c *Client) Post(tag string, v interface{}, options ...Option) error {
-	c.startWriter()
+	c.startMinion()
 
 	if p := c.tagPrefix; len(p) > 0 {
 		tag = p + "." + tag
@@ -82,55 +84,55 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 		return errors.New("buffer full")
 	}
 
-	c.muWriter.Lock()
-	if c.writerCancel == nil {
-		c.muWriter.Unlock()
+	c.muMinion.Lock()
+	if c.minionCancel == nil {
+		c.muMinion.Unlock()
 		return errors.New("writer has been closed. Shutdown called?")
 	}
-	c.writerQueue <- buf
-	c.muWriter.Unlock()
+	c.minionQueue <- buf
+	c.muMinion.Unlock()
 
 	return nil
 }
 
 // Close closes the connection, but does not wait for the pending buffers
-// to be flushed. If you want to make sure that background writer has properly
+// to be flushed. If you want to make sure that background minion has properly
 // exited, you should probably use the Shutdown() method
 func (c *Client) Close() error {
-	c.muWriter.Lock()
-	defer c.muWriter.Unlock()
-	if c.writerCancel == nil {
+	c.muMinion.Lock()
+	defer c.muMinion.Unlock()
+	if c.minionCancel == nil {
 		return nil
 	}
-	c.writerCancel()
-	c.writerCancel = nil
+	c.minionCancel()
+	c.minionCancel = nil
 	return nil
 }
 
 // Shutdown closes the connection. This method will block until the
-// background writer exits, or the caller explicitly cancels the
+// background minion exits, or the caller explicitly cancels the
 // provided context object.
 func (c *Client) Shutdown(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background() // no cancel...
 	}
 
-	c.muWriter.Lock()
-	if c.writerCancel == nil {
-		c.muWriter.Unlock()
+	c.muMinion.Lock()
+	if c.minionCancel == nil {
+		c.muMinion.Unlock()
 		return nil
 	}
 
-	// fire the cancel function. the background writer should
+	// fire the cancel function. the background minion should
 	// attempt to flush all of its pending buffers
-	c.writerCancel()
-	c.writerCancel = nil
-	writerDone := c.writerExit
-	c.muWriter.Unlock()
+	c.minionCancel()
+	c.minionCancel = nil
+	minionDone := c.minionExit
+	c.muMinion.Unlock()
 
 	select {
 	case <-ctx.Done():
-	case <-writerDone:
+	case <-minionDone:
 		return nil
 	}
 	return ctx.Err()
