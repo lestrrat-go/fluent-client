@@ -56,9 +56,15 @@ func Example() {
 
 # BENCHMARKS
 
+instructions: make sure you have the required fluentd clients, start fluentd at 127.0.0.1:24224, and run
+
 ```
-BenchmarkLestrrat-4   	   10000	   1053089 ns/op	    6679 B/op	      70 allocs/op
-BenchmarkFluent-4     	   10000	   1441954 ns/op	    9040 B/op	     100 allocs/op
+go test -run=none -bench=. -benchmem -tags bench
+```
+
+```
+BenchmarkLestrrat-4   	   10000	   1070433 ns/op	    4921 B/op	      50 allocs/op
+BenchmarkFluent-4     	   10000	   1706871 ns/op	    9040 B/op	     100 allocs/op
 PASS
-ok  	github.com/lestrrat/go-fluent-client	27.010s
+ok  	github.com/lestrrat/go-fluent-client	27.817s
 ```

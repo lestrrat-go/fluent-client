@@ -47,7 +47,7 @@ type minion struct {
 	done          chan struct{}
 	flush         bool
 	incoming      chan []byte
-	muFlush sync.RWMutex
+	muFlush       sync.RWMutex
 	muPending     sync.Mutex
 	network       string
 	pending       []byte
@@ -219,7 +219,7 @@ func (m *minion) runWriter(ctx context.Context) {
 			conn.Close()
 			conn = nil
 		} else {
-			m.updateBufsize(len(m.pending)-n)
+			m.updateBufsize(len(m.pending) - n)
 			m.pending = m.pending[n:]
 		}
 		m.muPending.Unlock()

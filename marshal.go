@@ -4,10 +4,36 @@ import (
 	"bytes"
 	"encoding/json"
 	"strconv"
+	"sync"
 
+	bufferpool "github.com/lestrrat/go-bufferpool"
 	"github.com/pkg/errors"
 	msgpack "gopkg.in/vmihailenco/msgpack.v2"
 )
+
+var bufpool *bufferpool.BufferPool
+var msgpool sync.Pool
+
+func init() {
+	bufpool = bufferpool.New()
+	msgpool.New = allocMessage
+}
+
+func allocMessage() interface{} {
+	return &Message{}
+}
+
+func getMessage() *Message {
+	return msgpool.Get().(*Message)
+}
+
+func releaseMessage(m *Message) {
+	m.Tag = ""
+	m.Time = 0
+	m.Record = nil
+	m.Option = nil
+	msgpool.Put(m)
+}
 
 type marshalFunc func(string, int64, interface{}, interface{}) ([]byte, error)
 
@@ -134,19 +160,35 @@ func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
 }
 
 func msgpackMarshal(tag string, t int64, record, option interface{}) ([]byte, error) {
-	return msgpack.Marshal(&Message{
-		Tag:    tag,
-		Time:   t,
-		Record: record,
-		Option: option,
-	})
+	buf := bufpool.Get()
+	defer bufpool.Release(buf)
+
+	m := getMessage()
+	defer releaseMessage(m)
+
+	m.Tag = tag
+	m.Time = t
+	m.Record = record
+	m.Option = option
+	if err := msgpack.NewEncoder(buf).Encode(m); err != nil {
+		return nil, errors.Wrap(err, `failed to encode msgpack`)
+	}
+	return buf.Bytes(), nil
 }
 
 func jsonMarshal(tag string, t int64, record, option interface{}) ([]byte, error) {
-	return json.Marshal(&Message{
-		Tag:    tag,
-		Time:   t,
-		Record: record,
-		Option: option,
-	})
+	buf := bufpool.Get()
+	defer bufpool.Release(buf)
+
+	m := getMessage()
+	defer releaseMessage(m)
+
+	m.Tag = tag
+	m.Time = t
+	m.Record = record
+	m.Option = option
+	if err := json.NewEncoder(buf).Encode(m); err != nil {
+		return nil, errors.Wrap(err, `failed to encode json`)
+	}
+	return buf.Bytes(), nil
 }
