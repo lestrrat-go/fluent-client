@@ -12,6 +12,7 @@ func New(options ...Option) (*Client, error) {
 		address:     "127.0.0.1:24224",
 		bufferLimit: 8 * 1024 * 1024,
 		dialTimeout: 3 * time.Second,
+		marshaler:   marshalFunc(msgpackMarshal),
 		network:     "tcp",
 	}
 

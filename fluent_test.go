@@ -125,9 +125,10 @@ func (s *server) Run(ctx context.Context) {
 }
 
 func TestPostRoundtrip(t *testing.T) {
-	var testcases = []map[string]interface{}{
+	var testcases = []interface{}{
 		map[string]interface{}{"foo": "bar"},
 		map[string]interface{}{"fuga": "bar", "hoge": "fuga"},
+		struct{ Foo string }{ Foo: "bar" },
 	}
 
 	for _, marshalerName := range []string{"json", "msgpack"} {

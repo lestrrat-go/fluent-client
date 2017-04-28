@@ -9,10 +9,12 @@ import (
 )
 
 func Example() {
-  // Connects to fluentd at fluent.example.com:24224. If you are
-  // connecting to 127.0.0.1:24224, you can call `New()` without
-  // any arguments
-	client, err := fluent.New(fluent.WithAddress("fluent.example.com"))
+  // Connects to fluentd at 127.0.0.1:24224. If you want to connect to
+	// a different host, use the following:
+	//
+	//   client, err := fluent.New(fluent.WithAddress("fluent.example.com"))
+	//
+	client, err := fluent.New(fluent.WithJSONMarshaler())
 	if err != nil {
 		// fluent.New may return an error if invalid values were
 		// passed to the constructor
@@ -28,14 +30,20 @@ func Example() {
 		defer cancel()
 
 		if err := client.Shutdown(ctx); err != nil {
-			// Failed to shutdown properly. force-close it
+			log.Printf("Failed to shutdown properly. force-close it")
 			client.Close()
 		}
+		log.Printf("shutdown complete")
 	}()
 
-	var payload interface{}
-	if err := client.Post("tag", payload); err != nil {
+	var payload = map[string]string{
+		"foo": "bar",
+	}
+	log.Printf("Posting message")
+	if err := client.Post("debug.test", payload); err != nil {
 		log.Printf("failed to post: %s", err)
 		return
 	}
+
+	// OUTPUT:
 }

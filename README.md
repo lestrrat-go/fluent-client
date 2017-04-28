@@ -16,10 +16,12 @@ import (
 )
 
 func Example() {
-  // Connects to fluentd at fluent.example.com:24224. If you are
-  // connecting to 127.0.0.1:24224, you can call `New()` without
-  // any arguments
-  client := fluent.New(fluent.WithAddress("fluent.example.com"))
+  // Connects to fluentd at 127.0.0.1:24224. If you want to connect to
+  // a different host, use the following:
+  //
+  //   client, err := fluent.New(fluent.WithAddress("fluent.example.com"))
+  //
+  client, err := fluent.New(fluent.WithJSONMarshaler())
   if err != nil {
     // fluent.New may return an error if invalid values were
     // passed to the constructor
