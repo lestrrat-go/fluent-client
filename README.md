@@ -54,3 +54,11 @@ func Example() {
 }
 ```
 
+# BENCHMARKS
+
+```
+BenchmarkLestrrat-4   	   10000	   1053089 ns/op	    6679 B/op	      70 allocs/op
+BenchmarkFluent-4     	   10000	   1441954 ns/op	    9040 B/op	     100 allocs/op
+PASS
+ok  	github.com/lestrrat/go-fluent-client	27.010s
+```
