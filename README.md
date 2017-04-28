@@ -1,6 +1,10 @@
 # go-fluent-client
 
-[WIP] A fluentd client
+A fluentd client
+
+[![Build Status](https://travis-ci.org/lestrrat/go-fluent-client.png?branch=master)](https://travis-ci.org/lestrrat/go-fluent-client)
+
+[![GoDoc](https://godoc.org/github.com/lestrrat/go-fluent-client?status.svg)](https://godoc.org/github.com/lestrrat/go-fluent-client)
 
 # DESCRIPTION
 
