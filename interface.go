@@ -13,6 +13,8 @@ type Client struct {
 	minionQueue  chan *Message
 }
 
+// Option is an interface used for providing options to the
+// various methods
 type Option interface {
 	Name() string
 	Value() interface{}

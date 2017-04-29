@@ -16,6 +16,8 @@ func (f marshalFunc) Marshal(msg *Message) ([]byte, error) {
 	return f(msg)
 }
 
+// UnmarshalJSON deserializes from a JSON buffer and populates
+// a Message struct appropriately
 func (m *Message) UnmarshalJSON(buf []byte) error {
 	var l []json.RawMessage
 	if err := json.Unmarshal(buf, &l); err != nil {
@@ -52,6 +54,7 @@ func (m *Message) UnmarshalJSON(buf []byte) error {
 	return nil
 }
 
+// MarshalJSON serializes a Message to JSON format
 func (m *Message) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 
@@ -84,6 +87,7 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// EncodeMsgpack serializes a Message to msgpack format
 func (m *Message) EncodeMsgpack(enc *msgpack.Encoder) error {
 	if err := enc.EncodeArrayLen(4); err != nil {
 		return errors.Wrap(err, `failed to encode msgpack: array len`)
@@ -105,6 +109,8 @@ func (m *Message) EncodeMsgpack(enc *msgpack.Encoder) error {
 	return nil
 }
 
+// DecodeMsgpack deserializes from a msgpack buffer and populates
+// a Message struct appropriately
 func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
 	l, err := dec.DecodeArrayLen()
 	if err != nil {
