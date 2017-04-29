@@ -80,10 +80,22 @@ func (s *server) Run(ctx context.Context) {
 	defer pdebug.Printf("bail out of server.Run")
 	defer close(s.done)
 
-	var once sync.Once
-	for {
+	go func() {
 		select {
 		case <-ctx.Done():
+			s.listener.Close()
+		}
+	}()
+
+	pdebug.Printf("server started")
+	var once sync.Once
+	for {
+		pdebug.Printf("server loop")
+		select {
+		case <-ctx.Done():
+			if pdebug.Enabled {
+				pdebug.Printf("cancel detected in server.Run")
+			}
 			return
 		default:
 		}
@@ -133,10 +145,14 @@ func (s *server) Run(ctx context.Context) {
 			var v *fluent.Message
 			select {
 			case <-ctx.Done():
+				if pdebug.Enabled {
 				pdebug.Printf("bailout")
+				}
 				return
 			case v = <-readerCh:
+				if pdebug.Enabled {
 				pdebug.Printf("new payload: %#v", v)
+				}
 			}
 
 			// This is some silly stuff, but msgpack would return
@@ -251,9 +267,13 @@ func TestPostRoundtrip(t *testing.T) {
 					return
 				}
 			}
+			client.Shutdown(nil)
 
 			time.Sleep(time.Second)
 			scancel()
+			if pdebug.Enabled {
+				pdebug.Printf("canceled server context")
+			}
 
 			select {
 			case <-ctx.Done():
