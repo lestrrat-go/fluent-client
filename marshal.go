@@ -4,38 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"strconv"
-	"sync"
 
 	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
 	msgpack "gopkg.in/vmihailenco/msgpack.v2"
 )
-
-var msgpool sync.Pool
-
-func init() {
-	msgpool.New = allocMessage
-}
-
-func allocMessage() interface{} {
-	return &Message{}
-}
-
-func getMessage() *Message {
-	return msgpool.Get().(*Message)
-}
-
-func releaseMessage(m *Message) {
-	m.Tag = ""
-	m.Time = 0
-	m.Record = nil
-	m.Option = nil
-	if m.replyCh != nil {
-		close(m.replyCh)
-		m.replyCh = nil
-	}
-	msgpool.Put(m)
-}
 
 type marshalFunc func(*Message) ([]byte, error)
 
