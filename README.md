@@ -64,6 +64,9 @@ instructions: make sure you have the required fluentd clients, start fluentd at 
 go test -run=none -bench=. -benchmem -tags bench
 ```
 
+Note that for each iteration, we do 10 posts to the server, so each parameter should be divided by 10
+to figure out the actual costs for a single post.
+
 ```
 BenchmarkK0kubun-4    	   10000	    474927 ns/op	    9765 B/op	     129 allocs/op
 BenchmarkLestrrat-4   	   10000	    597923 ns/op	    6040 B/op	      60 allocs/op
