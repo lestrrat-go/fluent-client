@@ -46,7 +46,9 @@ func Example() {
     }
   }()
 
-  var payload interface{}
+  var payload = map[string]string{
+    "foo": "bar",
+  }
   if err := client.Post("tag", payload); err != nil {
     log.Printf("failed to post: %s", err)
     return
