@@ -1,7 +1,5 @@
 package fluent
 
-import "time"
-
 type marshaler interface {
 	Marshal(*Message) ([]byte, error)
 }
@@ -10,15 +8,9 @@ type marshaler interface {
 // and proxies it to a background minion. The background minion attempts to
 // write to the server as soon as possible
 type Client struct {
-	address      string // network address (host:port) or socket path
-	bufferLimit  int
-	dialTimeout  time.Duration // max time to wait when connecting
-	marshaler    marshaler
 	minionCancel func()
 	minionDone   chan struct{}
 	minionQueue  chan *Message
-	network      string // tcp or unix
-	tagPrefix    string
 }
 
 type Option interface {

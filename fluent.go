@@ -11,40 +11,22 @@ import (
 
 // New creates a new client.
 func New(options ...Option) (*Client, error) {
-	c := &Client{
-		address:     "127.0.0.1:24224",
-		bufferLimit: 8 * 1024 * 1024,
-		dialTimeout: 3 * time.Second,
-		marshaler:   marshalFunc(msgpackMarshal),
-		minionDone:  make(chan struct{}),
-		network:     "tcp",
+	m, err := newMinion(options...)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, opt := range options {
-		switch opt.Name() {
-		case "network":
-			v := opt.Value().(string)
-			switch v {
-			case "tcp", "unix":
-			default:
-				return nil, errors.Errorf(`invalid network type: %s`, v)
-			}
-			c.network = v
-		case "address":
-			c.address = opt.Value().(string)
-		case "buffer_limit":
-			c.bufferLimit = opt.Value().(int)
-		case "dialTimeout":
-			c.dialTimeout = opt.Value().(time.Duration)
-		case "marshaler":
-			c.marshaler = opt.Value().(marshaler)
-		case "tag_prefix":
-			c.tagPrefix = opt.Value().(string)
-		}
-	}
+	var c Client
+	ctx, cancel := context.WithCancel(context.Background())
 
-	c.startMinion()
-	return c, nil
+	c.minionDone = m.done
+	c.minionQueue = m.incoming
+	c.minionCancel = cancel
+
+	go m.runReader(ctx)
+	go m.runWriter(ctx)
+
+	return &c, nil
 }
 
 // Post posts the given structure after encoding it along with the given tag.
@@ -65,10 +47,6 @@ func New(options ...Option) (*Client, error) {
 // 2. If the marshaling into msgpack/json failed, it is returned
 //
 func (c *Client) Post(tag string, v interface{}, options ...Option) error {
-	if p := c.tagPrefix; len(p) > 0 {
-		tag = p + "." + tag
-	}
-
 	var syncAppend bool
 	var t int64
 	for _, opt := range options {

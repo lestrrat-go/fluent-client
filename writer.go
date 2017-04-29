@@ -26,50 +26,63 @@ import (
 
 // Starts the background writer.
 func (c *Client) startMinion() {
-	ctx, cancel := context.WithCancel(context.Background())
-	c.minionCancel = cancel
-	m := newMinion(c)
-
-	go m.runReader(ctx)
-	go m.runWriter(ctx)
 }
 
 type minion struct {
-	address       string
-	bufferLimit   int
-	cond          *sync.Cond
-	dialTimeout   time.Duration
-	done          chan struct{}
-	flush         bool
-	incoming      chan *Message
-	marshaler     marshaler
-	muFlush       sync.RWMutex
-	muPending     sync.RWMutex
-	network       string
-	pending       []byte
-	writeTimeout  time.Duration
+	address      string
+	bufferLimit  int
+	cond         *sync.Cond
+	dialTimeout  time.Duration
+	done         chan struct{}
+	flush        bool
+	incoming     chan *Message
+	marshaler    marshaler
+	muFlush      sync.RWMutex
+	muPending    sync.RWMutex
+	network      string
+	pending      []byte
+	tagPrefix    string
+	writeTimeout time.Duration
 }
 
-func newMinion(c *Client) *minion {
-	var m minion
+func newMinion(options ...Option) (*minion, error) {
+	m := &minion{
+		address:      "127.0.0.1:24224",
+		bufferLimit:  8 * 1024 * 1024,
+		cond:         sync.NewCond(&sync.Mutex{}),
+		dialTimeout:  3 * time.Second,
+		done:         make(chan struct{}),
+		incoming:     make(chan *Message),
+		marshaler:    marshalFunc(msgpackMarshal),
+		network:      "tcp",
+		writeTimeout: 3 * time.Second,
+	}
 
-	m.address = c.address
-	m.bufferLimit = c.bufferLimit
-	m.cond = sync.NewCond(&sync.Mutex{})
-	m.dialTimeout = c.dialTimeout
-	m.done = c.minionDone
-	// unbuffered, so the writer knows that immediately upon
-	// write success, we received it
-	m.incoming = make(chan *Message)
-	m.marshaler = c.marshaler
-	m.network = c.network
-	m.pending = make([]byte, 0, c.bufferLimit)
-	m.writeTimeout = 3 * time.Second
+	for _, opt := range options {
+		switch opt.Name() {
+		case "network":
+			v := opt.Value().(string)
+			switch v {
+			case "tcp", "unix":
+			default:
+				return nil, errors.Errorf(`invalid network type: %s`, v)
+			}
+			m.network = v
+		case "address":
+			m.address = opt.Value().(string)
+		case "buffer_limit":
+			m.bufferLimit = opt.Value().(int)
+		case "dialTimeout":
+			m.dialTimeout = opt.Value().(time.Duration)
+		case "marshaler":
+			m.marshaler = opt.Value().(marshaler)
+		case "tag_prefix":
+			m.tagPrefix = opt.Value().(string)
+		}
+	}
+	m.pending = make([]byte, 0, m.bufferLimit)
 
-	// Copy relevant data to client
-	c.minionQueue = m.incoming
-
-	return &m
+	return m, nil
 }
 
 func (m *minion) runReader(ctx context.Context) {
@@ -101,6 +114,10 @@ func (m *minion) runReader(ctx context.Context) {
 
 func (m *minion) appendMessage(msg *Message) {
 	defer releaseMessage(msg)
+
+	if p := m.tagPrefix; len(p) > 0 {
+		msg.Tag = p + "." + msg.Tag
+	}
 
 	if pdebug.Enabled {
 		if msg.replyCh != nil {
