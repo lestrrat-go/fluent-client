@@ -249,6 +249,14 @@ func (m *minion) runWriter(ctx context.Context) {
 			conn.Close()
 			conn = nil
 		}
+
+		if flush {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+		}
 	}
 }
 
@@ -258,7 +266,7 @@ func (m *minion) waitPending(ctx context.Context) error {
 	// up again
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil
 	default:
 	}
 
