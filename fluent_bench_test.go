@@ -11,11 +11,12 @@ import (
 )
 
 const tag = "debug.test"
+const postsPerIter = 10
 
 func BenchmarkK0kubun(b *testing.B) {
 	c := k0kubun.NewLogger(k0kubun.Config{})
 	for i := 0; i < b.N; i++ {
-		for j := 0; j < 10; j++ {
+		for j := 0; j < postsPerIter; j++ {
 			c.Post(tag, map[string]interface{}{"count": j})
 		}
 	}
@@ -24,7 +25,7 @@ func BenchmarkK0kubun(b *testing.B) {
 func BenchmarkLestrrat(b *testing.B) {
 	c, _ := lestrrat.New()
 	for i := 0; i < b.N; i++ {
-		for j := 0; j < 10; j++ {
+		for j := 0; j < postsPerIter; j++ {
 			if c.Post(tag, map[string]interface{}{"count": j}) != nil {
 				b.Logf("whoa Post failed")
 			}
@@ -36,7 +37,7 @@ func BenchmarkLestrrat(b *testing.B) {
 func BenchmarkFluent(b *testing.B) {
 	c, _ := fluent.New(fluent.Config{})
 	for i := 0; i < b.N; i++ {
-		for j := 0; j < 10; j++ {
+		for j := 0; j < postsPerIter; j++ {
 			if c.Post(tag, map[string]interface{}{"count": j}) != nil {
 				b.Logf("whoa Post failed")
 			}
