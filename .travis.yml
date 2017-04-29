@@ -1,5 +1,6 @@
 language: go
 sudo: false
+script: go test -tags debug0 ./...
 go:
     - 1.8.x
     - tip
