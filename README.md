@@ -71,3 +71,11 @@ BenchmarkFluent-4     	   10000	    778976 ns/op	    9041 B/op	     100 allocs/o
 PASS
 ok  	github.com/lestrrat/go-fluent-client	20.673s
 ```
+
+## Versions
+
+| Library | Version |
+|---------|---------|
+| github.com/lestrrat/go-fluent-client | b49175826c55bc4a195b5958491e0c57e637ecd7 |
+| github.com/k0kubun/fluent-logger-go | e1cfc57bb12c99d7207d43b942527c9450d14382 |
+| github.com/fluent/fluent-logger-golang | b8d749d6b17d9373c54c9f66b1f1c075a83bbfed |

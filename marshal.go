@@ -4,41 +4,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"strconv"
-	"sync"
 
 	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
 	msgpack "gopkg.in/vmihailenco/msgpack.v2"
 )
 
-var msgpool sync.Pool
+type marshalFunc func(*Message) ([]byte, error)
 
-func init() {
-	msgpool.New = allocMessage
+func (f marshalFunc) Marshal(msg *Message) ([]byte, error) {
+	return f(msg)
 }
 
-func allocMessage() interface{} {
-	return &Message{}
-}
-
-func getMessage() *Message {
-	return msgpool.Get().(*Message)
-}
-
-func releaseMessage(m *Message) {
-	m.Tag = ""
-	m.Time = 0
-	m.Record = nil
-	m.Option = nil
-	msgpool.Put(m)
-}
-
-type marshalFunc func(string, int64, interface{}, interface{}) ([]byte, error)
-
-func (f marshalFunc) Marshal(tag string, t int64, record, option interface{}) ([]byte, error) {
-	return f(tag, t, record, option)
-}
-
+// UnmarshalJSON deserializes from a JSON buffer and populates
+// a Message struct appropriately
 func (m *Message) UnmarshalJSON(buf []byte) error {
 	var l []json.RawMessage
 	if err := json.Unmarshal(buf, &l); err != nil {
@@ -75,6 +54,7 @@ func (m *Message) UnmarshalJSON(buf []byte) error {
 	return nil
 }
 
+// MarshalJSON serializes a Message to JSON format
 func (m *Message) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 
@@ -107,6 +87,7 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// EncodeMsgpack serializes a Message to msgpack format
 func (m *Message) EncodeMsgpack(enc *msgpack.Encoder) error {
 	if err := enc.EncodeArrayLen(4); err != nil {
 		return errors.Wrap(err, `failed to encode msgpack: array len`)
@@ -128,6 +109,8 @@ func (m *Message) EncodeMsgpack(enc *msgpack.Encoder) error {
 	return nil
 }
 
+// DecodeMsgpack deserializes from a msgpack buffer and populates
+// a Message struct appropriately
 func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
 	l, err := dec.DecodeArrayLen()
 	if err != nil {
@@ -161,30 +144,16 @@ func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
 	return nil
 }
 
-func msgpackMarshal(tag string, t int64, record, option interface{}) ([]byte, error) {
+func msgpackMarshal(m *Message) ([]byte, error) {
 	var buf bytes.Buffer
-	m := getMessage()
-	defer releaseMessage(m)
-
-	m.Tag = tag
-	m.Time = t
-	m.Record = record
-	m.Option = option
 	if err := msgpack.NewEncoder(&buf).Encode(m); err != nil {
 		return nil, errors.Wrap(err, `failed to encode msgpack`)
 	}
 	return buf.Bytes(), nil
 }
 
-func jsonMarshal(tag string, t int64, record, option interface{}) ([]byte, error) {
+func jsonMarshal(m *Message) ([]byte, error) {
 	var buf bytes.Buffer
-	m := getMessage()
-	defer releaseMessage(m)
-
-	m.Tag = tag
-	m.Time = t
-	m.Record = record
-	m.Option = option
 	if err := json.NewEncoder(&buf).Encode(m); err != nil {
 		return nil, errors.Wrap(err, `failed to encode json`)
 	}
