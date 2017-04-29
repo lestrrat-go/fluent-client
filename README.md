@@ -86,12 +86,15 @@ ok  	github.com/lestrrat/go-fluent-client	5.937s
 
 #### Pros
 
-I'm biased (duh): 
+Does come up in the benchmark with lowest allocations/op
 
-1. "proper" `Shutdown` method to flush buffers at the end
-2. Tried very hard to avoid any race conditions
+Proper `Shutdown` method to flush buffers at the end.
+
+Tried very hard to avoid any race conditions.
 
 #### Cons
+
+I'm biased (duh).
 
 Very, very new and untested on the field.
 
