@@ -130,7 +130,7 @@ a bit slow, but it's sturdy, period.
 
 The benchmark scores are pretty low. This could just be my benchmark, so please take with a grain of salt.
 
-Looking at the code, it looks non-gopher-ish. Use of `panic` is one such item, as in Go you should avoid
+Looking at the code, it looks non-gopher-ish. Use of `panic` is one such item. In Go you should avoid
 casual panics, which causes long-running daemons to write code like this https://github.com/moby/moby/blob/1325f667eeb42b717c2f9d369f2ee6d701a280e3/daemon/logger/fluentd/fluentd.go#L46-L49
 
 
