@@ -98,3 +98,14 @@ func WithBufferLimit(v interface{}) Option {
 		value: v,
 	}
 }
+
+// WithWriteThreshold specifies the minimum number of bytes that we
+// should have pending before starting to attempt to write to the
+// server. The default value is 8KB
+func WithWriteThreshold(i int) Option {
+	const name = "write_threshold"
+	return &option{
+		name: name,
+		value: i,
+	}
+}
