@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -151,6 +152,52 @@ func (s *server) Run(ctx context.Context) {
 			}
 			s.Payload = append(s.Payload, v)
 		}
+	}
+}
+
+func TestPostSync(t *testing.T) {
+	for _, syncAppend := range []bool{true, false} {
+		t.Run("sync="+strconv.FormatBool(syncAppend), func(t *testing.T) {
+			s, err := newServer(false)
+			if !assert.NoError(t, err, "newServer should succeed") {
+				return
+			}
+			defer s.Close()
+
+			// This is just to stop the server
+			sctx, scancel := context.WithCancel(context.Background())
+
+			go s.Run(sctx)
+
+			<-s.Ready()
+
+			client, err := fluent.New(
+				fluent.WithNetwork(s.Network),
+				fluent.WithAddress(s.Address),
+				fluent.WithBufferLimit(1),
+			)
+
+			if !assert.NoError(t, err, "failed to create fluent client") {
+				return
+			}
+
+			var options []fluent.Option
+			if syncAppend {
+				options = append(options, fluent.WithSyncAppend(true))
+			}
+			err = client.Post("tag_name", map[string]interface{}{"foo": 1}, options...)
+			if syncAppend {
+				if !assert.Error(t, err, "should receive an error") {
+					return
+				}
+			} else {
+				if !assert.NoError(t, err, "should NOT receive an error") {
+					return
+				}
+			}
+			client.Shutdown(nil)
+			scancel()
+		})
 	}
 }
 

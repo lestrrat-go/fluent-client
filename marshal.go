@@ -30,13 +30,17 @@ func releaseMessage(m *Message) {
 	m.Time = 0
 	m.Record = nil
 	m.Option = nil
+	if m.replyCh != nil {
+		close(m.replyCh)
+		m.replyCh = nil
+	}
 	msgpool.Put(m)
 }
 
-type marshalFunc func(string, int64, interface{}, interface{}) ([]byte, error)
+type marshalFunc func(*Message) ([]byte, error)
 
-func (f marshalFunc) Marshal(tag string, t int64, record, option interface{}) ([]byte, error) {
-	return f(tag, t, record, option)
+func (f marshalFunc) Marshal(msg *Message) ([]byte, error) {
+	return f(msg)
 }
 
 func (m *Message) UnmarshalJSON(buf []byte) error {
@@ -161,30 +165,16 @@ func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
 	return nil
 }
 
-func msgpackMarshal(tag string, t int64, record, option interface{}) ([]byte, error) {
+func msgpackMarshal(m *Message) ([]byte, error) {
 	var buf bytes.Buffer
-	m := getMessage()
-	defer releaseMessage(m)
-
-	m.Tag = tag
-	m.Time = t
-	m.Record = record
-	m.Option = option
 	if err := msgpack.NewEncoder(&buf).Encode(m); err != nil {
 		return nil, errors.Wrap(err, `failed to encode msgpack`)
 	}
 	return buf.Bytes(), nil
 }
 
-func jsonMarshal(tag string, t int64, record, option interface{}) ([]byte, error) {
+func jsonMarshal(m *Message) ([]byte, error) {
 	var buf bytes.Buffer
-	m := getMessage()
-	defer releaseMessage(m)
-
-	m.Tag = tag
-	m.Time = t
-	m.Record = record
-	m.Option = option
 	if err := json.NewEncoder(&buf).Encode(m); err != nil {
 		return nil, errors.Wrap(err, `failed to encode json`)
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pdebug "github.com/lestrrat/go-pdebug"
+	"github.com/pkg/errors"
 )
 
 // Architecture:
@@ -25,14 +26,7 @@ import (
 
 // Starts the background writer.
 func (c *Client) startMinion() {
-	c.muMinion.Lock()
-	defer c.muMinion.Unlock()
-	if c.minionCancel != nil {
-		return
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
-
 	c.minionCancel = cancel
 	m := newMinion(c)
 
@@ -42,16 +36,17 @@ func (c *Client) startMinion() {
 
 type minion struct {
 	address       string
+	bufferLimit   int
 	cond          *sync.Cond
 	dialTimeout   time.Duration
 	done          chan struct{}
 	flush         bool
-	incoming      chan []byte
+	incoming      chan *Message
+	marshaler     marshaler
 	muFlush       sync.RWMutex
 	muPending     sync.RWMutex
 	network       string
 	pending       []byte
-	updateBufsize func(int)
 	writeTimeout  time.Duration
 }
 
@@ -59,20 +54,20 @@ func newMinion(c *Client) *minion {
 	var m minion
 
 	m.address = c.address
+	m.bufferLimit = c.bufferLimit
 	m.cond = sync.NewCond(&sync.Mutex{})
 	m.dialTimeout = c.dialTimeout
-	m.done = make(chan struct{})
+	m.done = c.minionDone
 	// unbuffered, so the writer knows that immediately upon
 	// write success, we received it
-	m.incoming = make(chan []byte)
+	m.incoming = make(chan *Message)
+	m.marshaler = c.marshaler
 	m.network = c.network
 	m.pending = make([]byte, 0, c.bufferLimit)
-	m.updateBufsize = c.updateBufsize
 	m.writeTimeout = 3 * time.Second
 
 	// Copy relevant data to client
 	c.minionQueue = m.incoming
-	c.minionExit = m.done
 
 	return &m
 }
@@ -94,20 +89,58 @@ func (m *minion) runReader(ctx context.Context) {
 			m.muFlush.Unlock()
 
 			m.cond.Broadcast()
-			return
-		case data := <-m.incoming:
-			m.muPending.Lock()
 			if pdebug.Enabled {
-				pdebug.Printf("background reader: received %d more bytes, appending", len(data))
+				pdebug.Printf("background reader: cancel detected")
 			}
-			m.pending = append(m.pending, data...)
-			m.updateBufsize(len(m.pending))
-			m.muPending.Unlock()
-
-			// Wake up the writer goroutine
-			m.cond.Broadcast()
+			return
+		case msg := <-m.incoming:
+			m.appendMessage(msg)
 		}
 	}
+}
+
+func (m *minion) appendMessage(msg *Message) {
+	defer releaseMessage(msg)
+
+	if pdebug.Enabled {
+		if msg.replyCh != nil {
+			pdebug.Printf("background reader: message expects reply")
+		}
+	}
+
+	buf, err := m.marshaler.Marshal(msg)
+	if err != nil {
+		if pdebug.Enabled {
+			pdebug.Printf("background reader: failed to marshal message: %s", err)
+		}
+		if msg.replyCh != nil {
+			msg.replyCh <- errors.Wrap(err, `failed to marshal payload`)
+		}
+		return
+	}
+
+	m.muPending.Lock()
+	isFull := len(m.pending)+len(buf) > m.bufferLimit
+
+	if isFull {
+		if pdebug.Enabled {
+			pdebug.Printf("background reader: buffer is full")
+		}
+		if msg.replyCh != nil {
+			msg.replyCh <- errors.New("buffer full")
+		}
+		m.muPending.Unlock()
+		return
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("background reader: received %d more bytes, appending", len(buf))
+	}
+	m.pending = append(m.pending, buf...)
+	m.muPending.Unlock()
+
+	// Wake up the writer goroutine
+	m.cond.Broadcast()
 }
 
 func (m *minion) runWriter(ctx context.Context) {
@@ -143,6 +176,7 @@ func (m *minion) runWriter(ctx context.Context) {
 			m.muPending.RLock()
 			pendingLen := len(m.pending)
 			m.muPending.RUnlock()
+
 			if pendingLen > 0 {
 				if pdebug.Enabled {
 					pdebug.Printf("background writer: %d bytes to write", pendingLen)
@@ -152,6 +186,9 @@ func (m *minion) runWriter(ctx context.Context) {
 
 			select {
 			case <-ctx.Done():
+				if pdebug.Enabled {
+					pdebug.Printf("background writer: cancel detected")
+				}
 				return
 			default:
 			}
@@ -227,7 +264,6 @@ func (m *minion) runWriter(ctx context.Context) {
 			conn.Close()
 			conn = nil
 		} else {
-			m.updateBufsize(len(m.pending) - n)
 			m.pending = m.pending[n:]
 			if pdebug.Enabled {
 				pdebug.Printf("%d more bytes to write", len(m.pending))

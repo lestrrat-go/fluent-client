@@ -62,3 +62,19 @@ func WithTagPrefix(s string) Option {
 		value: s,
 	}
 }
+
+func WithSyncAppend(b bool) Option {
+	const name = "sync_append"
+	return &option{
+		name:  name,
+		value: b,
+	}
+}
+
+func WithBufferLimit(v interface{}) Option {
+	const name = "buffer_limit"
+	return &option{
+		name:  name,
+		value: v,
+	}
+}
