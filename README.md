@@ -64,21 +64,74 @@ instructions: make sure you have the required fluentd clients, start fluentd at 
 go test -run=none -bench=. -benchmem -tags bench
 ```
 
-Note that for each iteration, we do 10 posts to the server, so each parameter should be divided by 10
-to figure out the actual costs for a single post.
-
 ```
-BenchmarkK0kubun-4    	   10000	    474927 ns/op	    9765 B/op	     129 allocs/op
-BenchmarkLestrrat-4   	   10000	    597923 ns/op	    6040 B/op	      60 allocs/op
-BenchmarkFluent-4     	   10000	    683505 ns/op	    9040 B/op	     100 allocs/op
+BenchmarkK0kubun-4    	 1000000	      2576 ns/op	     976 B/op	      13 allocs/op
+BenchmarkLestrrat-4   	  500000	      2651 ns/op	     574 B/op	       6 allocs/op
+BenchmarkFluent-4     	  200000	      9163 ns/op	     904 B/op	      10 allocs/op
 PASS
-ok  	github.com/lestrrat/go-fluent-client	17.614s
+ok  	github.com/lestrrat/go-fluent-client	5.937s
 ```
 
 ## Versions
 
 | Library | Version |
 |---------|---------|
-| github.com/lestrrat/go-fluent-client | 187e78dfe13f97194e8c7f1cf922c4b6f89100a5 |
+| github.com/lestrrat/go-fluent-client | d39385acb076df42a37322fb911fbcbfa9ceaf8b |
 | github.com/k0kubun/fluent-logger-go | e1cfc57bb12c99d7207d43b942527c9450d14382 |
 | github.com/fluent/fluent-logger-golang | b8d749d6b17d9373c54c9f66b1f1c075a83bbfed |
+
+## Analysis 
+
+### github.com/lestrrat/go-fluent-client
+
+#### Pros
+
+I'm biased (duh): 
+
+1. "proper" `Shutdown` method to flush buffers at the end
+2. Tried very hard to avoid any race conditions
+
+#### Cons
+
+Very, very new and untested on the field.
+
+With all the trickery, still can't beat `github.com/k0kubun/fluent-logger-go` in benchmarks.
+
+### github.com/k0kubun/fluent-logger-go
+
+#### Pros
+
+This library consistently records the shorted wallclock time per iteration. I believe this is due to the
+fact that it does very little error handling and synchronization. If you use the msgpack serialization
+format and that's it, you probably will be fine using this library.
+
+#### Cons
+
+Do note that as of the version I tested above, the `Logger.Log` method has a glaring race condition
+that will probably corrupt your messages sooner than you can blink: DO NOT USE THE `Logger.Log` method.
+
+Also, there is no way for the caller to check for serialization errors when using `Logger.Post`. You can get the
+error status using `Logger.Log`, but as previously stated, you do not want to use it. 
+
+Finally, there is no way to flush pending buffers: If you append a lot of buffers in succession, and
+abruptly quit your program, you're done for. You lose all your data.
+
+Oh, and it supports JSON only, but this is a very minor issue: a casual user really shouldn't have to care which
+serialization format you're sending your format with.
+
+### github.com/fluent/fluent-logger-golang
+
+#### Pros
+
+This official binding from the maitainers of fluentd is by far the most battle-tested library. It may be
+a bit slow, but it's sturdy, period.
+
+#### Cons
+
+The benchmark scores are pretty low. This could just be my benchmark, so please take with a grain of salt.
+
+Looking at the code, it looks non-gopher-ish. Use of `panic` is one such item, as in Go you should avoid
+casual panics, which causes long-running daemons to write code like this https://github.com/moby/moby/blob/1325f667eeb42b717c2f9d369f2ee6d701a280e3/daemon/logger/fluentd/fluentd.go#L46-L49
+
+
+
