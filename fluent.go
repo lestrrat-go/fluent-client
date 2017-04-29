@@ -42,7 +42,7 @@ func New(options ...Option) (*Client, error) {
 // If fluent.WithSyncAppend is provide and is true, the following errors
 // may be returned:
 //
-// 1. If the current underlying pending buffer is checked for its size. If it
+// 1. If the current underlying pending buffer is checked for its size, and it
 // is not large enough to hold this new data, an error will be returned
 // 2. If the marshaling into msgpack/json failed, it is returned
 //
