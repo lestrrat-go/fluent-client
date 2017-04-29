@@ -11,7 +11,7 @@ import (
 )
 
 const tag = "debug.test"
-const postsPerIter = 10
+const postsPerIter = 1
 
 func BenchmarkK0kubun(b *testing.B) {
 	c := k0kubun.NewLogger(k0kubun.Config{})
