@@ -106,7 +106,7 @@ ok  	github.com/lestrrat/go-fluent-client	7.489s
 
 | Library | Version |
 |---------|---------|
-| github.com/lestrrat/go-fluent-client | d39385acb076df42a37322fb911fbcbfa9ceaf8b |
+| github.com/lestrrat/go-fluent-client | 14383336cf69cf3c8a1a27905cfe079a9fb08394 |
 | github.com/k0kubun/fluent-logger-go | e1cfc57bb12c99d7207d43b942527c9450d14382 |
 | github.com/fluent/fluent-logger-golang | b8d749d6b17d9373c54c9f66b1f1c075a83bbfed |
 
