@@ -6,7 +6,7 @@ A fluentd client
 
 [![GoDoc](https://godoc.org/github.com/lestrrat/go-fluent-client?status.svg)](https://godoc.org/github.com/lestrrat/go-fluent-client)
 
-# DESCRIPTION
+# SYNOPSIS
 
 ```go
 package fluent_test
@@ -53,6 +53,36 @@ func Example() {
     log.Printf("failed to post: %s", err)
     return
   }
+}
+```
+
+# DESCRIPTION
+
+This is a client to the fluentd log collection daemon.
+
+# FEATURES
+
+## Performance
+
+Please see the BENCHMARK section.
+
+## A well defined `Shutdown()` method
+
+Because we expecct to connect to these daemons over the wire, the various fluentd clients all perform buffering of data to be sent, then sends them when it can. At the end of your program, you should wait for your logs to be sent to the server.
+
+Calling either `Close()` or `Shutdown()` triggers the flushing of pending logs, but the former does not wait for this operation to be completed, while the latter does. With `Shutdown` you can either wait indefinitely, or timeout the operation after the desired period of time using `context.Context`
+
+## A flexible `Post()` method
+
+The `Post()` method provided by this module can either simply enqueue a new payload to be appended to the buffer mentioned in the previous section, and let it process asynchronously, or it can wait for confirmation that the payload has been properly enqueued. Other libraries usually only do one or the other, but we can handle either.
+
+```go
+// "fire-and-forget"
+client.Post(tagName, payload)
+
+// make sure that we receive confirmation the payload has been appended
+if err := client.Post(tagName, payload, fluent.WithSyncAppend(true)); err != nil {
+  ...
 }
 ```
 
