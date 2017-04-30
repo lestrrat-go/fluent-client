@@ -119,7 +119,7 @@ error status using `Logger.Log`, but as previously stated, you do not want to us
 Finally, there is no way to flush pending buffers: If you append a lot of buffers in succession, and
 abruptly quit your program, you're done for. You lose all your data.
 
-Oh, and it supports JSON only, but this is a very minor issue: a casual user really shouldn't have to care which
+Oh, and it supports Msgpack only, but this is a very minor issue: a casual user really shouldn't have to care which
 serialization format you're sending your format with.
 
 ### github.com/fluent/fluent-logger-golang
