@@ -104,7 +104,7 @@ With all the trickery, still can't beat `github.com/k0kubun/fluent-logger-go` in
 
 #### Pros
 
-This library consistently records the shorted wallclock time per iteration. I believe this is due to the
+This library consistently records the shortest wallclock time per iteration. I believe this is due to the
 fact that it does very little error handling and synchronization. If you use the msgpack serialization
 format and that's it, you probably will be fine using this library.
 
