@@ -146,12 +146,12 @@ func (s *server) Run(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				if pdebug.Enabled {
-				pdebug.Printf("bailout")
+					pdebug.Printf("bailout")
 				}
 				return
 			case v = <-readerCh:
 				if pdebug.Enabled {
-				pdebug.Printf("new payload: %#v", v)
+					pdebug.Printf("new payload: %#v", v)
 				}
 			}
 
@@ -168,6 +168,20 @@ func (s *server) Run(ctx context.Context) {
 			}
 			s.Payload = append(s.Payload, v)
 		}
+	}
+}
+
+func TestCloseAndPost(t *testing.T) {
+	client, err := fluent.New()
+	if !assert.NoError(t, err, `fluent.New should succeed`) {
+		return
+	}
+
+	// immediately close
+	client.Close()
+
+	if !assert.Error(t, client.Post("tag_name", nil), `we should error after a call to Close()`) {
+		return
 	}
 }
 

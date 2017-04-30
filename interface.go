@@ -1,5 +1,7 @@
 package fluent
 
+import "sync"
+
 type marshaler interface {
 	Marshal(*Message) ([]byte, error)
 }
@@ -8,9 +10,11 @@ type marshaler interface {
 // and proxies it to a background minion. The background minion attempts to
 // write to the server as soon as possible
 type Client struct {
+	closed       bool
 	minionCancel func()
 	minionDone   chan struct{}
 	minionQueue  chan *Message
+	muClosed     sync.RWMutex
 }
 
 // Option is an interface used for providing options to the
