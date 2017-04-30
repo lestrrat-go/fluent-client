@@ -116,7 +116,7 @@ ok  	github.com/lestrrat/go-fluent-client	5.808s
 
 #### Pros
 
-Loowest allocations/op.
+Lowest allocations/op.
 
 Proper `Shutdown` method to flush buffers at the end.
 
