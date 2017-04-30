@@ -30,23 +30,31 @@ func New(options ...Option) (*Client, error) {
 }
 
 // Post posts the given structure after encoding it along with the given tag.
-// An error is returned if the background writer goroutine is not currently
-// running.
 //
-// If you would like to specify options, you may pass them at the end of
+// An error is returned if the client has already been closed.
+//
+// If you would like to specify options to `Post()`, you may pass them at the end of
 // the method. Currently you can use the following:
 //
-// fluent.WithTimestamp: allows you to set arbitrary timestamp values
-// fluent.WithSyncAppend: allows you to verify if the append was successful
+//   fluent.WithTimestamp: allows you to set arbitrary timestamp values
+//   fluent.WithSyncAppend: allows you to verify if the append was successful
 //
 // If fluent.WithSyncAppend is provide and is true, the following errors
 // may be returned:
 //
-// 1. If the current underlying pending buffer is checked for its size, and it
-// is not large enough to hold this new data, an error will be returned
-// 2. If the marshaling into msgpack/json failed, it is returned
+//   1. If the current underlying pending buffer is is not large enough to
+//      hold this new data, an error will be returned
+//   2. If the marshaling into msgpack/json failed, it is returned
 //
 func (c *Client) Post(tag string, v interface{}, options ...Option) error {
+	// Do not allow processing at all if we have closed
+	c.muClosed.RLock()
+	defer c.muClosed.RUnlock()
+
+	if c.closed {
+		return errors.New(`client has already been closed`)
+	}
+
 	var syncAppend bool
 	var t int64
 	for _, opt := range options {
@@ -102,13 +110,17 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 // to be flushed. If you want to make sure that background minion has properly
 // exited, you should probably use the Shutdown() method
 func (c *Client) Close() error {
+	c.muClosed.Lock()
+	c.closed = true
+	c.muClosed.Unlock()
+
 	c.minionCancel()
 	return nil
 }
 
-// Shutdown closes the connection. This method will block until the
-// background minion exits, or the caller explicitly cancels the
-// provided context object.
+// Shutdown closes the connection, and notifies the background worker to
+// flush all existing buffers. This method will block until the
+// background minion exits, or the provided context object is canceled.
 func (c *Client) Shutdown(ctx context.Context) error {
 	if pdebug.Enabled {
 		pdebug.Printf("client: shutdown requested")

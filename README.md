@@ -95,18 +95,18 @@ go test -run=none -bench=. -benchmem -tags bench
 ```
 
 ```
-BenchmarkK0kubun-4    	 1000000	      2576 ns/op	     976 B/op	      13 allocs/op
-BenchmarkLestrrat-4   	  500000	      2651 ns/op	     574 B/op	       6 allocs/op
-BenchmarkFluent-4     	  200000	      9163 ns/op	     904 B/op	      10 allocs/op
+BenchmarkK0kubun-4    	 1000000	      3369 ns/op	     976 B/op	      13 allocs/op
+BenchmarkLestrrat-4   	  500000	      3097 ns/op	     574 B/op	       6 allocs/op
+BenchmarkFluent-4     	  200000	     11823 ns/op	     904 B/op	      10 allocs/op
 PASS
-ok  	github.com/lestrrat/go-fluent-client	5.937s
+ok  	github.com/lestrrat/go-fluent-client	7.489s
 ```
 
 ## Versions
 
 | Library | Version |
 |---------|---------|
-| github.com/lestrrat/go-fluent-client | d39385acb076df42a37322fb911fbcbfa9ceaf8b |
+| github.com/lestrrat/go-fluent-client | 14383336cf69cf3c8a1a27905cfe079a9fb08394 |
 | github.com/k0kubun/fluent-logger-go | e1cfc57bb12c99d7207d43b942527c9450d14382 |
 | github.com/fluent/fluent-logger-golang | b8d749d6b17d9373c54c9f66b1f1c075a83bbfed |
 
@@ -116,7 +116,7 @@ ok  	github.com/lestrrat/go-fluent-client	5.937s
 
 #### Pros
 
-Does come up in the benchmark with lowest allocations/op
+Loowest allocations/op.
 
 Proper `Shutdown` method to flush buffers at the end.
 
@@ -128,15 +128,13 @@ I'm biased (duh).
 
 Very, very new and untested on the field.
 
-With all the trickery, still can't beat `github.com/k0kubun/fluent-logger-go` in benchmarks.
-
 ### github.com/k0kubun/fluent-logger-go
 
 #### Pros
 
-This library consistently records the shortest wallclock time per iteration. I believe this is due to the
-fact that it does very little error handling and synchronization. If you use the msgpack serialization
-format and that's it, you probably will be fine using this library.
+This library is fast. I believe this is due to the fact that it does very little error
+handling and synchronization. If you use the msgpack serialization format and that's it,
+you probably will be fine using this library.
 
 #### Cons
 
