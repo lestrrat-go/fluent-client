@@ -95,18 +95,18 @@ go test -run=none -bench=. -benchmem -tags bench
 ```
 
 ```
-BenchmarkK0kubun-4    	 1000000	      3369 ns/op	     976 B/op	      13 allocs/op
-BenchmarkLestrrat-4   	  500000	      3097 ns/op	     574 B/op	       6 allocs/op
-BenchmarkFluent-4     	  200000	     11823 ns/op	     904 B/op	      10 allocs/op
+BenchmarkK0kubun-4    	 1000000	      2675 ns/op	     976 B/op	      13 allocs/op
+BenchmarkLestrrat-4   	  500000	      3172 ns/op	     574 B/op	       6 allocs/op
+BenchmarkOfficial-4   	  100000	     13460 ns/op	     904 B/op	      10 allocs/op
 PASS
-ok  	github.com/lestrrat/go-fluent-client	7.489s
+ok  	github.com/lestrrat/go-fluent-client	5.808s
 ```
 
 ## Versions
 
 | Library | Version |
 |---------|---------|
-| github.com/lestrrat/go-fluent-client | 14383336cf69cf3c8a1a27905cfe079a9fb08394 |
+| github.com/lestrrat/go-fluent-client | 6a824f0090785222cfb6b710fdf2ae59d6da5e85 |
 | github.com/k0kubun/fluent-logger-go | e1cfc57bb12c99d7207d43b942527c9450d14382 |
 | github.com/fluent/fluent-logger-golang | b8d749d6b17d9373c54c9f66b1f1c075a83bbfed |
 
