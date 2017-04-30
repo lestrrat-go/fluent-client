@@ -5,7 +5,7 @@ package fluent_test
 import (
 	"testing"
 
-	"github.com/fluent/fluent-logger-golang/fluent"
+	official "github.com/fluent/fluent-logger-golang/fluent"
 	k0kubun "github.com/k0kubun/fluent-logger-go"
 	lestrrat "github.com/lestrrat/go-fluent-client"
 )
@@ -34,8 +34,8 @@ func BenchmarkLestrrat(b *testing.B) {
 	c.Shutdown(nil)
 }
 
-func BenchmarkFluent(b *testing.B) {
-	c, _ := fluent.New(fluent.Config{})
+func BenchmarkOfficial(b *testing.B) {
+	c, _ := official.New(official.Config{})
 	for i := 0; i < b.N; i++ {
 		for j := 0; j < postsPerIter; j++ {
 			if c.Post(tag, map[string]interface{}{"count": j}) != nil {
