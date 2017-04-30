@@ -9,7 +9,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-// New creates a new client.
+// New creates a new client. Options may be:
+//
+//   WithAddress: the address to connect to. default: 127.0.0.1:24224
+//   WithBufferLimit: the maximum pending buffer size. default: 8MB
+//   WithJSONMarshaler: use JSON serializer
+//   WithMsgpackMarshaler: use MessagePack serializer (default)
+//   WithNetwork: network type to use. default: tcp
+//   WithTagPrefix: tag prefix to append to all tags
+//   WithWriteThreshold: minimum number of bytes before starting to send to buffer to server
 func New(options ...Option) (*Client, error) {
 	m, err := newMinion(options...)
 	if err != nil {
