@@ -157,7 +157,12 @@ func (m *minion) appendMessage(msg *Message) {
 	m.pending = append(m.pending, buf...)
 	m.muPending.Unlock()
 
-	// Wake up the writer goroutine
+	// Wake up the writer goroutine. This is implemented in terms of a
+	// condition variable, because we do not want to block trying to
+	// write to a channel. With a condition variable, the blocking is
+	// contained to the scope of the condition variable's surrounding
+	// locker, so we save precious little time we have until we receive
+	// our next Post() requests
 	m.cond.Broadcast()
 }
 
