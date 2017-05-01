@@ -68,7 +68,7 @@ Please see the BENCHMARK section.
 
 ## A well defined `Shutdown()` method
 
-Because we expecct to connect to these daemons over the wire, the various fluentd clients all perform buffering of data to be sent, then sends them when it can. At the end of your program, you should wait for your logs to be sent to the server.
+Because we expect to connect to remote daemons over the wire, the various fluentd clients all perform local buffering of data to be sent, then sends them when it can. At the end of your program, you should wait for your logs to be sent to the server, otherwise you might have pending writes that haven't gone through yet.
 
 Calling either `Close()` or `Shutdown()` triggers the flushing of pending logs, but the former does not wait for this operation to be completed, while the latter does. With `Shutdown` you can either wait indefinitely, or timeout the operation after the desired period of time using `context.Context`
 
