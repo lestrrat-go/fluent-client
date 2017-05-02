@@ -27,9 +27,17 @@ func New(options ...Option) (*Client, error) {
 	var c Client
 	ctx, cancel := context.WithCancel(context.Background())
 
+	var subsecond bool
+	for _, opt := range options {
+		switch opt.Name() {
+		case "subsecond":
+			subsecond = opt.Value().(bool)
+		}
+	}
 	c.minionDone = m.done
 	c.minionQueue = m.incoming
 	c.minionCancel = cancel
+	c.subsecond = subsecond
 
 	go m.runReader(ctx)
 	go m.runWriter(ctx)
@@ -64,23 +72,27 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 	}
 
 	var syncAppend bool
-	var t int64
+	var subsecond = c.subsecond
+	var t time.Time
 	for _, opt := range options {
 		switch opt.Name() {
 		case "timestamp":
-			t = opt.Value().(time.Time).Unix()
+			t = opt.Value().(time.Time)
 		case "sync_append":
 			syncAppend = opt.Value().(bool)
+		case "subsecond":
+			subsecond = opt.Value().(bool)
 		}
 	}
-	if t == 0 {
-		t = time.Now().Unix()
+	if t.IsZero() {
+		t = time.Now()
 	}
 
 	msg := getMessage()
 	msg.Tag = tag
-	msg.Time = t
+	msg.Time.Time = t
 	msg.Record = v
+	msg.subsecond = subsecond
 
 	// This has to be separate from msg.replyCh, b/c msg would be
 	// put back to the pool

@@ -132,6 +132,7 @@ func (s *server) Run(ctx context.Context) {
 					if errors.Cause(err) == io.EOF {
 						return
 					}
+					continue
 				}
 				select {
 				case <-ctx.Done():
@@ -237,15 +238,18 @@ func TestPostRoundtrip(t *testing.T) {
 		map[string]interface{}{"fuga": "bar", "hoge": "fuga"},
 	}
 
-	for _, marshalerName := range []string{"json", "msgpack"} {
-		var marshaler fluent.Option
+	for _, marshalerName := range []string{"json", "msgpack", "msgpack-subsecond"} {
 		var useJSON bool
+		var options []fluent.Option
 		switch marshalerName {
 		case "json":
 			useJSON = true
-			marshaler = fluent.WithJSONMarshaler()
+			options = append(options, fluent.WithJSONMarshaler())
 		case "msgpack":
-			marshaler = fluent.WithMsgpackMarshaler()
+			options = append(options, fluent.WithMsgpackMarshaler())
+		case "msgpack-subsecond":
+			options = append(options, fluent.WithMsgpackMarshaler())
+			options = append(options, fluent.WithSubsecond(true))
 		}
 
 		t.Run("marshaler="+marshalerName, func(t *testing.T) {
@@ -266,9 +270,10 @@ func TestPostRoundtrip(t *testing.T) {
 			<-s.Ready()
 
 			client, err := fluent.New(
-				fluent.WithNetwork(s.Network),
-				fluent.WithAddress(s.Address),
-				marshaler,
+				append([]fluent.Option{
+					fluent.WithNetwork(s.Network),
+					fluent.WithAddress(s.Address),
+				}, options...)...
 			)
 			if !assert.NoError(t, err, "failed to create fluent client") {
 				return
@@ -301,7 +306,7 @@ func TestPostRoundtrip(t *testing.T) {
 			}
 
 			for i, data := range testcases {
-				if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: 1482493046, Record: data}, s.Payload[i]) {
+				if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: fluent.EventTime{ Time: time.Unix(1482493046, 0) }, Record: data}, s.Payload[i]) {
 					return
 				}
 			}

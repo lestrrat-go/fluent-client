@@ -1,6 +1,9 @@
 package fluent
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type marshaler interface {
 	Marshal(*Message) ([]byte, error)
@@ -15,6 +18,7 @@ type Client struct {
 	minionDone   chan struct{}
 	minionQueue  chan *Message
 	muClosed     sync.RWMutex
+	subsecond    bool
 }
 
 // Option is an interface used for providing options to the
@@ -27,9 +31,14 @@ type Option interface {
 // Message is a fluentd's payload, which can be encoded in JSON or MessagePack
 // format.
 type Message struct {
-	Tag     string      `msgpack:"tag"`
-	Time    int64       `msgpack:"time"`
-	Record  interface{} `msgpack:"record"`
-	Option  interface{} `msgpack:"option"`
-	replyCh chan error
+	Tag       string      `msgpack:"tag"`
+	Time      EventTime   `msgpack:"time"`
+	Record    interface{} `msgpack:"record"`
+	Option    interface{} `msgpack:"option"`
+	subsecond bool        // true if we should include subsecond resolution time
+	replyCh   chan error  // non-nil if caller expects notification for successfully appending to buffer
+}
+
+type EventTime struct {
+	time.Time
 }
