@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"strconv"
+	"time"
 
 	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
 	msgpack "gopkg.in/vmihailenco/msgpack.v2"
+	"gopkg.in/vmihailenco/msgpack.v2/codes"
 )
+
+var _ = codes.Ext8
 
 type marshalFunc func(*Message) ([]byte, error)
 
@@ -46,7 +50,7 @@ func (m *Message) UnmarshalJSON(buf []byte) error {
 
 	*m = Message{
 		Tag:    tag,
-		Time:   t,
+		Time:   EventTime{Time: time.Unix(t, 0)},
 		Record: r,
 		Option: o,
 	}
@@ -61,7 +65,7 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 	buf.WriteByte('[')
 	buf.WriteString(strconv.Quote(m.Tag))
 	buf.WriteByte(',')
-	buf.WriteString(strconv.FormatInt(m.Time, 10))
+	buf.WriteString(strconv.FormatInt(m.Time.Unix(), 10))
 	buf.WriteByte(',')
 
 	// XXX Encoder appends a silly newline at the end, so use
@@ -92,12 +96,19 @@ func (m *Message) EncodeMsgpack(enc *msgpack.Encoder) error {
 	if err := enc.EncodeArrayLen(4); err != nil {
 		return errors.Wrap(err, `failed to encode msgpack: array len`)
 	}
+
 	if err := enc.EncodeString(m.Tag); err != nil {
 		return errors.Wrap(err, `failed to encode msgpack: tag`)
 	}
 
-	if err := enc.EncodeInt64(m.Time); err != nil {
-		return errors.Wrap(err, `failed to encode msgpack: time`)
+	if m.subsecond {
+		if err := enc.Encode(&m.Time); err != nil {
+			return errors.Wrap(err, `failed to encode msgpack: time (EventTime)`)
+		}
+	} else {
+		if err := enc.EncodeInt64(m.Time.Unix()); err != nil {
+			return errors.Wrap(err, `failed to encode msgpack: time`)
+		}
 	}
 
 	if err := enc.Encode(m.Record); err != nil {
@@ -112,6 +123,19 @@ func (m *Message) EncodeMsgpack(enc *msgpack.Encoder) error {
 // DecodeMsgpack deserializes from a msgpack buffer and populates
 // a Message struct appropriately
 func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
+	var code byte
+	var err error
+
+	code, err = dec.PeekCode()
+	if err != nil {
+		return errors.Wrap(err, `failed to peek code`)
+	}
+
+	if !codes.IsFixedArray(code) {
+		dec.Skip()
+		return errors.Wrap(err, `expected array`)
+	}
+
 	l, err := dec.DecodeArrayLen()
 	if err != nil {
 		return errors.Wrap(err, `failed to decode msgpack: array len`)
@@ -126,9 +150,24 @@ func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
 		return errors.Wrap(err, `failed to decode msgpack: tag`)
 	}
 
-	m.Time, err = dec.DecodeInt64()
+	code, err = dec.PeekCode()
 	if err != nil {
-		return errors.Wrap(err, `failed to decode msgpack: time`)
+		return errors.Wrap(err, `failed to peek code`)
+	}
+
+	switch code {
+	case codes.Ext8, codes.FixExt8:
+		if err := dec.Decode(&m.Time); err != nil {
+			return errors.Wrap(err, `failed to decode msgpack: time (EventTime)`)
+		}
+	case codes.Uint32, codes.Int64:
+		t, err := dec.DecodeInt64()
+		if err != nil {
+			return errors.Wrap(err, `failed to decode msgpack: time`)
+		}
+		m.Time.Time = time.Unix(t, 0)
+	default:
+		return errors.Errorf(`expected ext8, fixedext8, or int64 for time: %b`, code)
 	}
 
 	m.Record, err = dec.DecodeInterface()

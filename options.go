@@ -109,3 +109,17 @@ func WithWriteThreshold(i int) Option {
 		value: i,
 	}
 }
+
+// WithSubsecond specifies if we should use EventTime for timestamps
+// on fluentd messages. May be used on a per-client basis or per-call
+// to Post(). By default this feature is turned OFF.
+//
+// Note that this option will only work for fluentd v0.14 or above,
+// and you must use gopkg.in/vmihailenco/msgpack.v2 2.9.1 or above.
+func WithSubsecond(b bool) Option {
+	const name = "subsecond"
+	return & option{
+		name: name,
+		value: b,
+	}
+}

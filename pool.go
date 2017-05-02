@@ -16,7 +16,7 @@ func getMessage() *Message {
 
 func releaseMessage(m *Message) {
 	m.Tag = ""
-	m.Time = 0
+	m.Time = EventTime{}
 	m.Record = nil
 	m.Option = nil
 	if m.replyCh != nil {
