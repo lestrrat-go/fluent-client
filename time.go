@@ -21,11 +21,7 @@ func (tm *EventTime) MarshalMsgpack() ([]byte, error) {
 	b := make([]byte, 8)
 
 	binary.BigEndian.PutUint32(b[:4], uint32(tm.Unix()))
-	nsec := tm.Nanosecond()
-	for nsec > math.MaxInt32 {
-		nsec /= 10
-	}
-	binary.BigEndian.PutUint32(b[4:], uint32(nsec))
+	binary.BigEndian.PutUint32(b[4:], uint32(tm.Nanosecond()))
 	return b, nil
 }
 
