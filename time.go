@@ -2,7 +2,6 @@ package fluent
 
 import (
 	"encoding/binary"
-	"math"
 	"time"
 
 	"github.com/pkg/errors"
