@@ -18,7 +18,7 @@ import (
 	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	msgpack "gopkg.in/vmihailenco/msgpack.v2"
+	msgpack "github.com/lestrrat/go-msgpack"
 )
 
 // to hell with race-conditions. no locking!
@@ -110,10 +110,7 @@ func (s *server) Run(ctx context.Context) {
 		if s.useJSON {
 			dec = json.NewDecoder(conn).Decode
 		} else {
-			msgpdec := msgpack.NewDecoder(conn)
-			dec = func(v interface{}) error {
-				return msgpdec.Decode(v)
-			}
+			dec = msgpack.NewDecoder(conn).Decode
 		}
 
 		readerCh := make(chan *fluent.Message)
@@ -281,7 +278,7 @@ func TestPostRoundtrip(t *testing.T) {
 			defer client.Shutdown(nil)
 
 			for _, data := range testcases {
-				err := client.Post("tag_name", data, fluent.WithTimestamp(time.Unix(1482493046, 0)))
+				err := client.Post("tag_name", data, fluent.WithTimestamp(time.Unix(1482493046, 0).UTC()))
 				if !assert.NoError(t, err, "client.Post should succeed") {
 					return
 				}
@@ -306,7 +303,7 @@ func TestPostRoundtrip(t *testing.T) {
 			}
 
 			for i, data := range testcases {
-				if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: fluent.EventTime{ Time: time.Unix(1482493046, 0) }, Record: data}, s.Payload[i]) {
+				if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: fluent.EventTime{ Time: time.Unix(1482493046, 0).UTC() }, Record: data}, s.Payload[i]) {
 					return
 				}
 			}
