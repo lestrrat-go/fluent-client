@@ -6,13 +6,10 @@ import (
 	"strconv"
 	"time"
 
+	msgpack "github.com/lestrrat/go-msgpack"
 	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
-	msgpack "gopkg.in/vmihailenco/msgpack.v2"
-	"gopkg.in/vmihailenco/msgpack.v2/codes"
 )
-
-var _ = codes.Ext8
 
 type marshalFunc func(*Message) ([]byte, error)
 
@@ -50,7 +47,7 @@ func (m *Message) UnmarshalJSON(buf []byte) error {
 
 	*m = Message{
 		Tag:    tag,
-		Time:   EventTime{Time: time.Unix(t, 0)},
+		Time:   EventTime{Time: time.Unix(t, 0).UTC()},
 		Record: r,
 		Option: o,
 	}
@@ -92,93 +89,52 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 }
 
 // EncodeMsgpack serializes a Message to msgpack format
-func (m *Message) EncodeMsgpack(enc *msgpack.Encoder) error {
-	if err := enc.EncodeArrayLen(4); err != nil {
-		return errors.Wrap(err, `failed to encode msgpack: array len`)
+func (m *Message) EncodeMsgpack(e *msgpack.Encoder) error {
+	if err := e.EncodeArrayHeader(4); err != nil {
+		return errors.Wrap(err, `failed to encode array header`)
 	}
-
-	if err := enc.EncodeString(m.Tag); err != nil {
-		return errors.Wrap(err, `failed to encode msgpack: tag`)
+	if err := e.EncodeString(m.Tag); err != nil {
+		return errors.Wrap(err, `failed to encode tag`)
 	}
-
-	if m.subsecond {
-		if err := enc.Encode(&m.Time); err != nil {
-			return errors.Wrap(err, `failed to encode msgpack: time (EventTime)`)
-		}
-	} else {
-		if err := enc.EncodeInt64(m.Time.Unix()); err != nil {
-			return errors.Wrap(err, `failed to encode msgpack: time`)
-		}
+	if err := e.EncodeStruct(m.Time); err != nil {
+		return errors.Wrap(err, `failed to encode time`)
 	}
-
-	if err := enc.Encode(m.Record); err != nil {
-		return errors.Wrap(err, `failed to encode msgpack: record`)
+	if err := e.EncodeMap(m.Record); err != nil {
+		return errors.Wrap(err, `failed to encode record`)
 	}
-	if err := enc.Encode(m.Option); err != nil {
-		return errors.Wrap(err, `failed to encode msgpack: option`)
+	if err := e.EncodeMap(m.Option); err != nil {
+		return errors.Wrap(err, `failed to encode option`)
 	}
 	return nil
 }
 
 // DecodeMsgpack deserializes from a msgpack buffer and populates
 // a Message struct appropriately
-func (m *Message) DecodeMsgpack(dec *msgpack.Decoder) error {
-	var code byte
-	var err error
-
-	code, err = dec.PeekCode()
-	if err != nil {
-		return errors.Wrap(err, `failed to peek code`)
-	}
-
-	if !codes.IsFixedArray(code) {
-		dec.Skip()
-		return errors.Wrap(err, `expected array`)
-	}
-
-	l, err := dec.DecodeArrayLen()
-	if err != nil {
-		return errors.Wrap(err, `failed to decode msgpack: array len`)
+func (m *Message) DecodeMsgpack(d *msgpack.Decoder) error {
+	var l int
+	if err := d.DecodeArrayLength(&l); err != nil {
+		return errors.Wrap(err, `failed to decode msgpack array length`)
 	}
 
 	if l != 4 {
-		return errors.Errorf(`expected tuple with 4 elements, got %d`, l)
+		return errors.Errorf(`invalid array length %d (expected 4)`, l)
 	}
 
-	m.Tag, err = dec.DecodeString()
-	if err != nil {
-		return errors.Wrap(err, `failed to decode msgpack: tag`)
-	}
+  if err := d.DecodeString(&m.Tag); err != nil {
+    return errors.Wrap(err, `failed to decode fluentd message tag`)
+  }
 
-	code, err = dec.PeekCode()
-	if err != nil {
-		return errors.Wrap(err, `failed to peek code`)
-	}
+  if err := d.DecodeStruct(&m.Time); err != nil {
+    return errors.Wrap(err, `failed to decode fluentd time`)
+  }
 
-	switch code {
-	case codes.Ext8, codes.FixExt8:
-		if err := dec.Decode(&m.Time); err != nil {
-			return errors.Wrap(err, `failed to decode msgpack: time (EventTime)`)
-		}
-	case codes.Uint32, codes.Int64:
-		t, err := dec.DecodeInt64()
-		if err != nil {
-			return errors.Wrap(err, `failed to decode msgpack: time`)
-		}
-		m.Time.Time = time.Unix(t, 0)
-	default:
-		return errors.Errorf(`expected ext8, fixedext8, or int64 for time: %b`, code)
-	}
+  if err := d.Decode(&m.Record); err != nil {
+    return errors.Wrap(err, `failed to decode fluentd record`)
+  }
 
-	m.Record, err = dec.DecodeInterface()
-	if err != nil {
-		return errors.Wrap(err, `failed to decode msgpack: record`)
-	}
-
-	m.Option, err = dec.DecodeInterface()
-	if err != nil {
-		return errors.Wrap(err, `failed to decode msgpack: option`)
-	}
+  if err := d.Decode(&m.Option); err != nil {
+    return errors.Wrap(err, `failed to decode fluentd option`)
+  }
 
 	return nil
 }
