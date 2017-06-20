@@ -15,10 +15,10 @@ import (
 	"time"
 
 	fluent "github.com/lestrrat/go-fluent-client"
+	msgpack "github.com/lestrrat/go-msgpack"
 	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	msgpack "github.com/lestrrat/go-msgpack"
 )
 
 // to hell with race-conditions. no locking!
@@ -229,10 +229,17 @@ func TestPostSync(t *testing.T) {
 	}
 }
 
+type Payload struct {
+	Foo string `msgpack:"foo" json:"foo"`
+	Bar string `msgpack:"bar" json:"bar"`
+}
+
 func TestPostRoundtrip(t *testing.T) {
 	var testcases = []interface{}{
 		map[string]interface{}{"foo": "bar"},
 		map[string]interface{}{"fuga": "bar", "hoge": "fuga"},
+		Payload{Foo: "foo", Bar: "bar"},
+		&Payload{Foo: "foo", Bar: "bar"},
 	}
 
 	for _, marshalerName := range []string{"json", "msgpack", "msgpack-subsecond"} {
@@ -270,7 +277,7 @@ func TestPostRoundtrip(t *testing.T) {
 				append([]fluent.Option{
 					fluent.WithNetwork(s.Network),
 					fluent.WithAddress(s.Address),
-				}, options...)...
+				}, options...)...,
 			)
 			if !assert.NoError(t, err, "failed to create fluent client") {
 				return
@@ -303,7 +310,31 @@ func TestPostRoundtrip(t *testing.T) {
 			}
 
 			for i, data := range testcases {
-				if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: fluent.EventTime{ Time: time.Unix(1482493046, 0).UTC() }, Record: data}, s.Payload[i]) {
+				// If data is not a map, we would need to convert it
+				var payload interface{}
+				if _, ok := data.(map[string]interface{}); ok {
+					payload = data
+				} else {
+					var marshaler func(interface{}) ([]byte, error)
+					var unmarshaler func([]byte, interface{}) error
+					if useJSON {
+						marshaler = json.Marshal
+						unmarshaler = json.Unmarshal
+					} else {
+						marshaler = msgpack.Marshal
+						unmarshaler = msgpack.Unmarshal
+					}
+					buf, err := marshaler(data)
+					if !assert.NoError(t, err, "Marshal should succeed") {
+						return
+					}
+					if !assert.NoError(t, unmarshaler(buf, &payload), "Unmarshal should succeed") {
+						return
+					}
+				}
+
+				if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: fluent.EventTime{Time: time.Unix(1482493046, 0).UTC()},
+					Record: payload}, s.Payload[i]) {
 					return
 				}
 			}
