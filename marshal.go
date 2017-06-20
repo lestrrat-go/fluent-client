@@ -99,10 +99,10 @@ func (m *Message) EncodeMsgpack(e *msgpack.Encoder) error {
 	if err := e.EncodeStruct(m.Time); err != nil {
 		return errors.Wrap(err, `failed to encode time`)
 	}
-	if err := e.EncodeMap(m.Record); err != nil {
+	if err := e.Encode(m.Record); err != nil {
 		return errors.Wrap(err, `failed to encode record`)
 	}
-	if err := e.EncodeMap(m.Option); err != nil {
+	if err := e.Encode(m.Option); err != nil {
 		return errors.Wrap(err, `failed to encode option`)
 	}
 	return nil
