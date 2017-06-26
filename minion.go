@@ -14,15 +14,18 @@ import (
 // Architecture:
 //
 // The Client passes encoded bytes to a channel where the minion reader
-// is reading from. The minion reader goroutine is responsible for accepting
-// these encoded bytes from the Client as soon as possible, as the Client
-// is being blocked while this is happening. The minion reader appends the
-// new bytes to a "pending" byte slice, and immediately goes back to waiting
-// for new bytes coming in from the client.
+// is reading from.
+//
+// The minion reader goroutine is responsible for accepting these encoded
+// bytes from the Client as soon as possible, as the Client is being blocked
+// while this is happening.
+//
+// The minion reader appends the new bytes to a "pending" byte slice, and
+// immediately goes back to waiting for new bytes coming in from the client.
 //
 // Meanwhile, a minion writer is woken up by the reader via a sync.Cond.
 // The minion writer checks to see if there are any pending bytes to write
-// to the server. If there's anything, we start the write process
+// to the server. If there's anything, we start the write process.
 //
 
 type minion struct {
@@ -86,6 +89,8 @@ func newMinion(options ...Option) (*minion, error) {
 	return m, nil
 }
 
+// This is the reader loop. The only thing we're responsible for
+// is to accept incoming messages from the client as soon as possible
 func (m *minion) runReader(ctx context.Context) {
 	if pdebug.Enabled {
 		pdebug.Printf("background reader: starting")
@@ -113,6 +118,7 @@ func (m *minion) runReader(ctx context.Context) {
 	}
 }
 
+// appends a message to the pending buffer
 func (m *minion) appendMessage(msg *Message) {
 	defer releaseMessage(msg)
 
@@ -137,7 +143,19 @@ func (m *minion) appendMessage(msg *Message) {
 		return
 	}
 
+	// Wake up the writer goroutine. This is implemented in terms of a
+	// condition variable, because we do not want to block trying to
+	// write to a channel. With a condition variable, the blocking is
+	// contained to the scope of the condition variable's surrounding
+	// locker, so we save precious little time we have until we receive
+	// our next Post() requests
+	//
+	// This is implemented in terms of a defer(), because we want to
+	// wake up the writer regardless of if the buffer is full or not
+	defer m.cond.Broadcast()
+
 	m.muPending.Lock()
+	defer m.muPending.Unlock()
 	isFull := len(m.pending)+len(buf) > m.bufferLimit
 
 	if isFull {
@@ -147,7 +165,6 @@ func (m *minion) appendMessage(msg *Message) {
 		if msg.replyCh != nil {
 			msg.replyCh <- errors.New("buffer full")
 		}
-		m.muPending.Unlock()
 		return
 	}
 
@@ -155,28 +172,20 @@ func (m *minion) appendMessage(msg *Message) {
 		pdebug.Printf("background reader: received %d more bytes, appending", len(buf))
 	}
 	m.pending = append(m.pending, buf...)
-	m.muPending.Unlock()
-
-	// Wake up the writer goroutine. This is implemented in terms of a
-	// condition variable, because we do not want to block trying to
-	// write to a channel. With a condition variable, the blocking is
-	// contained to the scope of the condition variable's surrounding
-	// locker, so we save precious little time we have until we receive
-	// our next Post() requests
-	m.cond.Broadcast()
 }
 
+// This goroutine waits for the receiver goroutine to wake
+// it up. When it's awake, we know that there's at least one
+// piece of data to send to the fluentd server.
 func (m *minion) runWriter(ctx context.Context) {
 	if pdebug.Enabled {
 		defer pdebug.Printf("background writer: exiting")
 	}
 	defer close(m.done)
 
-	// This goroutine waits for the receiver goroutine to wake
-	// it up. When it's awake, we know that there's at least one
-	// piece of data to send to the fluentd server.
 	var conn net.Conn
 	defer func() {
+		// Make sure that this connection is closed.
 		if conn != nil {
 			if pdebug.Enabled {
 				pdebug.Printf("background writer: closing connection (in cleanup)")
