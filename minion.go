@@ -13,20 +13,41 @@ import (
 
 // Architecture:
 //
-// The Client passes encoded bytes to a channel where the minion reader
-// is reading from.
+// The Client passes raw payload to be sent to fluentd to a channel where
+// the minion reader is reading from.
 //
-// The minion reader goroutine is responsible for accepting these encoded
-// bytes from the Client as soon as possible, as the Client is being blocked
-// while this is happening.
+//    User (payload) -> fluent.Client -> ch 
 //
-// The minion reader appends the new bytes to a "pending" byte slice, and
-// immediately goes back to waiting for new bytes coming in from the client.
+// In the default asynchronous mode, this is the end of interaction between
+// the library user and the library.
 //
-// Meanwhile, a minion writer is woken up by the reader via a sync.Cond.
+// The minion reader loop, which runs on a separate goroutine, reads the
+// payload, and encodes it to bytes using the designated marshaler, which
+// is then appended to a buffer that is shared between the minion reader
+// and writer.
+//
+//    payload -> marshaler (default: msgpac) -> bytes
+//
+// The minion reader is responsible for accepting the payload and encoding
+// it as soon as possible, as the Client is being blocked while this is
+// happening.
+//
+// Once the buffer is appended, the reader immediately goes back to waiting
+// for new payload coming in from the client.
+//
+// Meanwhile, the minion writer is woken up by the reader via a sync.Cond.
+// (The minion writer waits for this condition, so if there's nothing to
+// write, the writer does nothing)
+//
 // The minion writer checks to see if there are any pending bytes to write
 // to the server. If there's anything, we start the write process.
 //
+// The writer is responsible for connecting to the fluentd host, and reusing
+// that connection.
+//
+// Once connected, the writer tries to write everything it can, for as long
+// as it can. If the buffer is empty, or the connection is dropped, we
+// start over the write process (without waiting for the wake-up call)
 
 type minion struct {
 	address        string
@@ -102,7 +123,9 @@ func (m *minion) runReader(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			// Wake up the writer goroutine so that it can detect
-			// cancelation
+			// cancelation. m.flush is used to tell the write that
+			// it should try really hard to write everything in the
+			// buffer before the program exits
 			m.muFlush.Lock()
 			m.flush = true
 			m.muFlush.Unlock()
