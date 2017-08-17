@@ -96,9 +96,17 @@ func (m *Message) EncodeMsgpack(e *msgpack.Encoder) error {
 	if err := e.EncodeString(m.Tag); err != nil {
 		return errors.Wrap(err, `failed to encode tag`)
 	}
-	if err := e.EncodeStruct(m.Time); err != nil {
-		return errors.Wrap(err, `failed to encode time`)
+
+	if m.subsecond {
+		if err := e.EncodeStruct(m.Time); err != nil {
+			return errors.Wrap(err, `failed to encode time`)
+		}
+	} else {
+		if err := e.EncodeInt64(m.Time.Unix()); err != nil {
+			return errors.Wrap(err, `failed to encode msgpack: time`)
+		}
 	}
+
 	if err := e.Encode(m.Record); err != nil {
 		return errors.Wrap(err, `failed to encode record`)
 	}
@@ -120,21 +128,21 @@ func (m *Message) DecodeMsgpack(d *msgpack.Decoder) error {
 		return errors.Errorf(`invalid array length %d (expected 4)`, l)
 	}
 
-  if err := d.DecodeString(&m.Tag); err != nil {
-    return errors.Wrap(err, `failed to decode fluentd message tag`)
-  }
+	if err := d.DecodeString(&m.Tag); err != nil {
+		return errors.Wrap(err, `failed to decode fluentd message tag`)
+	}
 
-  if err := d.DecodeStruct(&m.Time); err != nil {
-    return errors.Wrap(err, `failed to decode fluentd time`)
-  }
+	if err := d.DecodeStruct(&m.Time); err != nil {
+		return errors.Wrap(err, `failed to decode fluentd time`)
+	}
 
-  if err := d.Decode(&m.Record); err != nil {
-    return errors.Wrap(err, `failed to decode fluentd record`)
-  }
+	if err := d.Decode(&m.Record); err != nil {
+		return errors.Wrap(err, `failed to decode fluentd record`)
+	}
 
-  if err := d.Decode(&m.Option); err != nil {
-    return errors.Wrap(err, `failed to decode fluentd option`)
-  }
+	if err := d.Decode(&m.Option); err != nil {
+		return errors.Wrap(err, `failed to decode fluentd option`)
+	}
 
 	return nil
 }
