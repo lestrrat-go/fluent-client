@@ -132,8 +132,21 @@ func (m *Message) DecodeMsgpack(d *msgpack.Decoder) error {
 		return errors.Wrap(err, `failed to decode fluentd message tag`)
 	}
 
-	if err := d.DecodeStruct(&m.Time); err != nil {
-		return errors.Wrap(err, `failed to decode fluentd time`)
+	c, err := d.PeekCode()
+	if err != nil {
+		return errors.Wrap(err, `failed to peek code for fluentd time`)
+	}
+
+	if msgpack.IsMapFamily(c) {
+		if err := d.DecodeStruct(&m.Time); err != nil {
+			return errors.Wrap(err, `failed to decode fluentd time`)
+		}
+	} else {
+		var v int64
+		if err := d.DecodeInt64(&v); err != nil {
+			return errors.Wrap(err, `failed to decode fluentd time`)
+		}
+		m.Time.Time = time.Unix(v, 0).UTC()
 	}
 
 	if err := d.Decode(&m.Record); err != nil {
