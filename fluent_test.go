@@ -198,6 +198,9 @@ func TestWithContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel early
 
+	// Make sure ctx is closed
+	<-ctx.Done()
+
 	if !assert.Error(t, client.Post("tag_name", "Hello, World", fluent.WithContext(ctx)), `we should error after context is canceled`) {
 		return
 	}
