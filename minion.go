@@ -284,7 +284,7 @@ func (m *minion) runWriter(ctx context.Context) {
 			}
 			if flush {
 				connAttempts++
-				if connAttempts > m.maxConnAttempts {
+				if m.maxConnAttempts > 0 && connAttempts > m.maxConnAttempts {
 					if pdebug.Enabled {
 						pdebug.Printf("background writer: bailing out after failed to connect to %s:%s (%d attempts) under flush mode", m.network, m.address, connAttempts)
 					}
