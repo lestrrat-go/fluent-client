@@ -52,6 +52,7 @@ func New(options ...Option) (*Client, error) {
 // If you would like to specify options to `Post()`, you may pass them at the end of
 // the method. Currently you can use the following:
 //
+//   fluent.WithContext: specify context.Context to use
 //   fluent.WithTimestamp: allows you to set arbitrary timestamp values
 //   fluent.WithSyncAppend: allows you to verify if the append was successful
 //
@@ -74,6 +75,7 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 	var syncAppend bool
 	var subsecond = c.subsecond
 	var t time.Time
+	var ctx = context.Background()
 	for _, opt := range options {
 		switch opt.Name() {
 		case "timestamp":
@@ -82,6 +84,8 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 			syncAppend = opt.Value().(bool)
 		case "subsecond":
 			subsecond = opt.Value().(bool)
+		case "context":
+			ctx = opt.Value().(context.Context)
 		}
 	}
 	if t.IsZero() {
@@ -103,6 +107,8 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 	}
 
 	select {
+	case <-ctx.Done():
+		return ctx.Err()
 	case <-c.minionDone:
 		return errors.New("writer has been closed. Shutdown called?")
 	case c.minionQueue <- msg:
@@ -113,6 +119,8 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 			pdebug.Printf("client: Post is waiting for return status")
 		}
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-c.minionDone:
 			return errors.New("writer has been closed. Shutdown called?")
 		case e := <-replyCh:

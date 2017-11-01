@@ -1,6 +1,9 @@
 package fluent
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type option struct {
 	name  string
@@ -105,7 +108,7 @@ func WithBufferLimit(v interface{}) Option {
 func WithWriteThreshold(i int) Option {
 	const name = "write_threshold"
 	return &option{
-		name: name,
+		name:  name,
 		value: i,
 	}
 }
@@ -118,8 +121,19 @@ func WithWriteThreshold(i int) Option {
 // and you must use gopkg.in/vmihailenco/msgpack.v2 2.9.1 or above.
 func WithSubsecond(b bool) Option {
 	const name = "subsecond"
-	return & option{
-		name: name,
+	return &option{
+		name:  name,
 		value: b,
+	}
+}
+
+// WihContext specifies the context.Context object to be used by Post().
+// Possible blocking operations are (1) writing to the background buffer,
+// and (2) waiting for a reply from when WithSyncAppend(true) is in use.
+func WithContext(ctx context.Context) Option {
+	const name = "context"
+	return &option{
+		name:  name,
+		value: ctx,
 	}
 }
