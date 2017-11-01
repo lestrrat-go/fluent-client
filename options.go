@@ -137,3 +137,24 @@ func WithContext(ctx context.Context) Option {
 		value: ctx,
 	}
 }
+
+// WithMaxConnAttempts specifies the maximum number of attempts made by
+// the client to connect to the fluentd server during final data flushing.
+//
+// During normal operations, the client will indefinitely attempt to connect
+// to the server (whilst being backed-off properly), as it should try as hard
+// as possible to send the stored data.
+//
+// This option controls the behavior when the client still has more data to
+// send AFTER it has been told to Close() or Shutdown(). In this case we know
+// the client wants to stop at some point, so we try to connect up to a
+// finite number of attempts.
+//
+// The default value is 64.
+func WithMaxConnAttempts(n uint64) Option {
+	const name = "max_conn_attempts"
+	return &option{
+		name:  name,
+		value: n,
+	}
+}

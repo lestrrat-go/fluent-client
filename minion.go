@@ -16,7 +16,7 @@ import (
 // The Client passes raw payload to be sent to fluentd to a channel where
 // the minion reader is reading from.
 //
-//    User (payload) -> fluent.Client -> ch 
+//    User (payload) -> fluent.Client -> ch
 //
 // In the default asynchronous mode, this is the end of interaction between
 // the library user and the library.
@@ -50,35 +50,37 @@ import (
 // start over the write process (without waiting for the wake-up call)
 
 type minion struct {
-	address        string
-	bufferLimit    int
-	cond           *sync.Cond
-	dialTimeout    time.Duration
-	done           chan struct{}
-	flush          bool
-	incoming       chan *Message
-	marshaler      marshaler
-	writeThreshold int
-	muFlush        sync.RWMutex
-	muPending      sync.RWMutex
-	network        string
-	pending        []byte
-	tagPrefix      string
-	writeTimeout   time.Duration
+	address         string
+	bufferLimit     int
+	cond            *sync.Cond
+	dialTimeout     time.Duration
+	done            chan struct{}
+	flush           bool
+	incoming        chan *Message
+	marshaler       marshaler
+	maxConnAttempts uint64
+	muFlush         sync.RWMutex
+	muPending       sync.RWMutex
+	network         string
+	pending         []byte
+	tagPrefix       string
+	writeThreshold  int
+	writeTimeout    time.Duration
 }
 
 func newMinion(options ...Option) (*minion, error) {
 	m := &minion{
-		address:        "127.0.0.1:24224",
-		bufferLimit:    8 * 1024 * 1024,
-		cond:           sync.NewCond(&sync.Mutex{}),
-		dialTimeout:    3 * time.Second,
-		done:           make(chan struct{}),
-		incoming:       make(chan *Message),
-		writeThreshold: 8 * 1028,
-		marshaler:      marshalFunc(msgpackMarshal),
-		network:        "tcp",
-		writeTimeout:   3 * time.Second,
+		address:         "127.0.0.1:24224",
+		bufferLimit:     8 * 1024 * 1024,
+		cond:            sync.NewCond(&sync.Mutex{}),
+		dialTimeout:     3 * time.Second,
+		done:            make(chan struct{}),
+		incoming:        make(chan *Message),
+		maxConnAttempts: 64,
+		marshaler:       marshalFunc(msgpackMarshal),
+		network:         "tcp",
+		writeThreshold:  8 * 1028,
+		writeTimeout:    3 * time.Second,
 	}
 
 	for _, opt := range options {
@@ -99,6 +101,8 @@ func newMinion(options ...Option) (*minion, error) {
 			m.dialTimeout = opt.Value().(time.Duration)
 		case "marshaler":
 			m.marshaler = opt.Value().(marshaler)
+		case "max_conn_attempts":
+			m.maxConnAttempts = opt.Value().(uint64)
 		case "write_threshold":
 			m.writeThreshold = opt.Value().(int)
 		case "tag_prefix":
@@ -233,6 +237,7 @@ func (m *minion) runWriter(ctx context.Context) {
 		// flush the remaining buffer, without checking the context cancelation
 		// status, otherwise we exit immediately
 
+		var connAttempts uint64
 		flush := m.isFlushMode()
 		for conn == nil {
 			if pdebug.Enabled {
@@ -268,8 +273,23 @@ func (m *minion) runWriter(ctx context.Context) {
 				}
 			}
 
-			if conn == nil {
-				flush = m.isFlushMode()
+			if conn != nil {
+				break
+			}
+
+			// The flush mode may have changed while we were trying to
+			// connect, so update it.
+			if m.isFlushMode() {
+				flush = true
+			}
+			if flush {
+				connAttempts++
+				if connAttempts > m.maxConnAttempts {
+					if pdebug.Enabled {
+						pdebug.Printf("background writer: bailing out after failed to connect to %s:%s (%d attempts) under flush mode", m.network, m.address, connAttempts)
+					}
+					return
+				}
 			}
 		}
 
@@ -384,6 +404,7 @@ func (m *minion) writePending(conn net.Conn) (int, error) {
 func (m *minion) pendingAvailable(threshold int) bool {
 	m.muPending.RLock()
 	defer m.muPending.RUnlock()
+
 	if l := len(m.pending); l > threshold {
 		if pdebug.Enabled {
 			pdebug.Printf("background writer: %d bytes to write", l)
