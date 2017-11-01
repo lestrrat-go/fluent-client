@@ -183,6 +183,20 @@ func TestCloseAndPost(t *testing.T) {
 	}
 }
 
+func TestWithContext(t *testing.T) {
+	client, err := fluent.New()
+	if !assert.NoError(t, err, `fluent.New should succeed`) {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel early
+
+	if !assert.Error(t, client.Post("tag_name", "Hello, World", fluent.WithContext(ctx)), `we should error after context is canceled`) {
+		return
+	}
+}
+
 func TestPostSync(t *testing.T) {
 	for _, syncAppend := range []bool{true, false} {
 		t.Run("sync="+strconv.FormatBool(syncAppend), func(t *testing.T) {
