@@ -21,9 +21,8 @@ func (o *option) Value() interface{} {
 // WithNetwork specifies the network type, i.e. "tcp" or "unix"
 // for `fluent.New`
 func WithNetwork(s string) Option {
-	const name = "network"
 	return &option{
-		name:  name,
+		name:  optkeyNetwork,
 		value: s,
 	}
 }
@@ -31,18 +30,16 @@ func WithNetwork(s string) Option {
 // WithAddress specifies the address to connect to for `fluent.New`
 // A unix domain socket path, or a hostname/IP address.
 func WithAddress(s string) Option {
-	const name = "address"
 	return &option{
-		name:  name,
+		name:  optkeyAddress,
 		value: s,
 	}
 }
 
 // WithTimestamp specifies the timestamp to be used for `Client.Post`
 func WithTimestamp(t time.Time) Option {
-	const name = "timestamp"
 	return &option{
-		name:  name,
+		name:  optkeyTimestamp,
 		value: t,
 	}
 }
@@ -50,9 +47,8 @@ func WithTimestamp(t time.Time) Option {
 // WithJSONMarshaler specifies JSON marshaling to be used when
 // sending messages to fluentd. Used for `fluent.New`
 func WithJSONMarshaler() Option {
-	const name = "marshaler"
 	return &option{
-		name:  name,
+		name:  optkeyMarshaler,
 		value: marshalFunc(jsonMarshal),
 	}
 }
@@ -60,9 +56,8 @@ func WithJSONMarshaler() Option {
 // WithMsgpackMarshaler specifies msgpack marshaling to be used when
 // sending messages to fluentd. Used in `fluent.New`
 func WithMsgpackMarshaler() Option {
-	const name = "marshaler"
 	return &option{
-		name:  name,
+		name:  optkeyMarshaler,
 		value: marshalFunc(msgpackMarshal),
 	}
 }
@@ -70,9 +65,8 @@ func WithMsgpackMarshaler() Option {
 // WithTagPrefix specifies the prefix to be appended to tag names
 // when sending messages to fluend. Used in `fluent.New`
 func WithTagPrefix(s string) Option {
-	const name = "tag_prefix"
 	return &option{
-		name:  name,
+		name:  optkeyTagPrefix,
 		value: s,
 	}
 }
@@ -82,9 +76,8 @@ func WithTagPrefix(s string) Option {
 // Used in `Client.Post`. If not specified, errors appending
 // are not reported.
 func WithSyncAppend(b bool) Option {
-	const name = "sync_append"
 	return &option{
-		name:  name,
+		name:  optkeySyncAppend,
 		value: b,
 	}
 }
@@ -95,9 +88,8 @@ func WithSyncAppend(b bool) Option {
 // use `WithSyncAppend` in `Client.Post` if you want this error
 // to be reported)
 func WithBufferLimit(v interface{}) Option {
-	const name = "buffer_limit"
 	return &option{
-		name:  name,
+		name:  optkeyBufferLimit,
 		value: v,
 	}
 }
@@ -106,9 +98,8 @@ func WithBufferLimit(v interface{}) Option {
 // should have pending before starting to attempt to write to the
 // server. The default value is 8KB
 func WithWriteThreshold(i int) Option {
-	const name = "write_threshold"
 	return &option{
-		name:  name,
+		name:  optkeyWriteThreshold,
 		value: i,
 	}
 }
@@ -117,12 +108,10 @@ func WithWriteThreshold(i int) Option {
 // on fluentd messages. May be used on a per-client basis or per-call
 // to Post(). By default this feature is turned OFF.
 //
-// Note that this option will only work for fluentd v0.14 or above,
-// and you must use gopkg.in/vmihailenco/msgpack.v2 2.9.1 or above.
+// Note that this option will only work for fluentd v0.14 or above.
 func WithSubsecond(b bool) Option {
-	const name = "subsecond"
 	return &option{
-		name:  name,
+		name:  optkeySubSecond,
 		value: b,
 	}
 }
@@ -131,9 +120,39 @@ func WithSubsecond(b bool) Option {
 // Possible blocking operations are (1) writing to the background buffer,
 // and (2) waiting for a reply from when WithSyncAppend(true) is in use.
 func WithContext(ctx context.Context) Option {
-	const name = "context"
 	return &option{
-		name:  name,
+		name:  optkeyContext,
 		value: ctx,
+	}
+}
+
+// WithMaxConnAttempts specifies the maximum number of attempts made by
+// the client to connect to the fluentd server during final data flushing.
+//
+// During normal operations, the client will indefinitely attempt to connect
+// to the server (whilst being backed-off properly), as it should try as hard
+// as possible to send the stored data.
+//
+// This option controls the behavior when the client still has more data to
+// send AFTER it has been told to Close() or Shutdown(). In this case we know
+// the client wants to stop at some point, so we try to connect up to a
+// finite number of attempts.
+//
+// The default value is 64.
+func WithMaxConnAttempts(n uint64) Option {
+	return &option{
+		name:  optkeyMaxConnAttempts,
+		value: n,
+	}
+}
+
+// WithDialTimeout specifies the amount of time allowed for the client to
+// establish connection with the server. If we are forced to wait for a
+// duration that exceeds the specified timeout, we deem the connection to
+// have failed. The default value is 3 seconds
+func WithDialTimeout(d time.Duration) Option {
+	return &option{
+		name:  optkeyDialTimeout,
+		value: d,
 	}
 }

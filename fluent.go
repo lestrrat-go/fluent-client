@@ -78,13 +78,13 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 	var ctx = context.Background()
 	for _, opt := range options {
 		switch opt.Name() {
-		case "timestamp":
+		case optkeyTimestamp:
 			t = opt.Value().(time.Time)
-		case "sync_append":
+		case optkeySyncAppend:
 			syncAppend = opt.Value().(bool)
-		case "subsecond":
+		case optkeySubSecond:
 			subsecond = opt.Value().(bool)
-		case "context":
+		case optkeyContext:
 			ctx = opt.Value().(context.Context)
 		}
 	}
