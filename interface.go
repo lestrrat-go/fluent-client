@@ -5,6 +5,21 @@ import (
 	"time"
 )
 
+const (
+	optkeyAddress         = "address"
+	optkeyBufferLimit     = "buffer_limit"
+	optkeyContext         = "context"
+	optkeyDialTimeout     = "dial_timeout"
+	optkeyMarshaler       = "marshaler"
+	optkeyMaxConnAttempts = "max_conn_attempts"
+	optkeyNetwork         = "network"
+	optkeySubSecond       = "subsecond"
+	optkeySyncAppend      = "sync_append"
+	optkeyTagPrefix       = "tag_prefix"
+	optkeyTimestamp       = "timestamp"
+	optkeyWriteThreshold  = "write_threshold"
+)
+
 type marshaler interface {
 	Marshal(*Message) ([]byte, error)
 }

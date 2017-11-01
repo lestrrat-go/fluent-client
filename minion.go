@@ -85,7 +85,7 @@ func newMinion(options ...Option) (*minion, error) {
 
 	for _, opt := range options {
 		switch opt.Name() {
-		case "network":
+		case optkeyNetwork:
 			v := opt.Value().(string)
 			switch v {
 			case "tcp", "unix":
@@ -93,19 +93,19 @@ func newMinion(options ...Option) (*minion, error) {
 				return nil, errors.Errorf(`invalid network type: %s`, v)
 			}
 			m.network = v
-		case "address":
+		case optkeyAddress:
 			m.address = opt.Value().(string)
-		case "buffer_limit":
+		case optkeyBufferLimit:
 			m.bufferLimit = opt.Value().(int)
-		case "dialTimeout":
+		case optkeyDialTimeout:
 			m.dialTimeout = opt.Value().(time.Duration)
-		case "marshaler":
+		case optkeyMarshaler:
 			m.marshaler = opt.Value().(marshaler)
-		case "max_conn_attempts":
+		case optkeyMaxConnAttempts:
 			m.maxConnAttempts = opt.Value().(uint64)
-		case "write_threshold":
+		case optkeyWriteThreshold:
 			m.writeThreshold = opt.Value().(int)
-		case "tag_prefix":
+		case optkeyTagPrefix:
 			m.tagPrefix = opt.Value().(string)
 		}
 	}
