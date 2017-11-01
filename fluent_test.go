@@ -77,7 +77,9 @@ func (s *server) Done() <-chan struct{} {
 }
 
 func (s *server) Run(ctx context.Context) {
-	defer pdebug.Printf("bail out of server.Run")
+	if pdebug.Enabled {
+		defer pdebug.Printf("bail out of server.Run")
+	}
 	defer close(s.done)
 
 	go func() {
@@ -87,10 +89,14 @@ func (s *server) Run(ctx context.Context) {
 		}
 	}()
 
-	pdebug.Printf("server started")
+	if pdebug.Enabled {
+		pdebug.Printf("server started")
+	}
 	var once sync.Once
 	for {
-		pdebug.Printf("server loop")
+		if pdebug.Enabled {
+			pdebug.Printf("server loop")
+		}
 		select {
 		case <-ctx.Done():
 			if pdebug.Enabled {
@@ -192,9 +198,51 @@ func TestWithContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel early
 
+	// Make sure ctx is closed
+	<-ctx.Done()
+
 	if !assert.Error(t, client.Post("tag_name", "Hello, World", fluent.WithContext(ctx)), `we should error after context is canceled`) {
 		return
 	}
+}
+
+func TestTagPrefix(t *testing.T) {
+	s, err := newServer(false)
+	if !assert.NoError(t, err, "newServer should succeed") {
+		return
+	}
+	defer s.Close()
+
+	// This is just to stop the server
+	sctx, scancel := context.WithCancel(context.Background())
+	defer scancel()
+
+	go s.Run(sctx)
+
+	<-s.Ready()
+
+	client, err := fluent.New(
+		fluent.WithNetwork(s.Network),
+		fluent.WithAddress(s.Address),
+		fluent.WithTagPrefix("test"),
+		fluent.WithContext(sctx),
+	)
+	if !assert.NoError(t, client.Post("tag_name", map[string]interface{}{"foo": 1}), "Post should succeed") {
+		return
+	}
+
+	client.Shutdown(nil)
+
+	for _, p := range s.Payload {
+		if !assert.Equal(t, "test.tag_name", p.Tag, "tag should have prefix") {
+			return
+		}
+	}
+}
+
+type badmsgpack struct {}
+func (msg *badmsgpack) EncodeMsgpack(_ *msgpack.Encoder) error {
+	return errors.New(`badmsgpack`)
 }
 
 func TestPostSync(t *testing.T) {
@@ -227,7 +275,19 @@ func TestPostSync(t *testing.T) {
 			if syncAppend {
 				options = append(options, fluent.WithSyncAppend(true))
 			}
+
 			err = client.Post("tag_name", map[string]interface{}{"foo": 1}, options...)
+			if syncAppend {
+				if !assert.Error(t, err, "should receive an error") {
+					return
+				}
+			} else {
+				if !assert.NoError(t, err, "should NOT receive an error") {
+					return
+				}
+			}
+
+			err = client.Post("tag_name", &badmsgpack{}, options...)
 			if syncAppend {
 				if !assert.Error(t, err, "should receive an error") {
 					return
