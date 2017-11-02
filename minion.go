@@ -51,6 +51,7 @@ import (
 
 type minion struct {
 	address         string
+	buffer          []byte
 	bufferLimit     int
 	cond            *sync.Cond
 	dialTimeout     time.Duration
@@ -112,7 +113,13 @@ func newMinion(options ...Option) (*minion, error) {
 			m.writeThreshold = opt.Value().(int)
 		}
 	}
-	m.pending = make([]byte, 0, m.bufferLimit)
+	m.buffer = make([]byte, 0, m.bufferLimit)
+	m.pending = m.buffer
+	if pdebug.Enabled {
+		pdebug.Printf("m.pending cap %d", cap(m.pending))
+		pdebug.Printf("m.pending len %d", len(m.pending))
+	}
+
 	m.incoming = make(chan *Message, writeQueueSize)
 
 	return m, nil
@@ -203,7 +210,10 @@ func (m *minion) appendMessage(msg *Message) {
 			pdebug.Printf("background reader: buffer is full")
 		}
 		if msg.replyCh != nil {
-			msg.replyCh <- errors.New("buffer full")
+			if pdebug.Enabled {
+				pdebug.Printf("background reader: replying error to client")
+			}
+			msg.replyCh <- &bufferFullErrInstance
 		}
 		return
 	}
@@ -409,6 +419,14 @@ func (m *minion) writePending(conn net.Conn) (int, error) {
 		return 0, errors.Wrap(err, `failed to write data to conn`)
 	}
 	m.pending = m.pending[n:]
+	if len(m.pending) == 0 {
+		m.pending = m.buffer[0:0]
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("m.pending cap %d", cap(m.pending))
+		pdebug.Printf("m.pending len %d", len(m.pending))
+	}
 	return n, nil
 }
 

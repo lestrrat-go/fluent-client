@@ -114,6 +114,9 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) (err error) 
 	// put back to the pool
 	var replyCh chan error
 	if syncAppend {
+		if pdebug.Enabled {
+			pdebug.Printf("client: synchronous append requested. creating channel")
+		}
 		replyCh = make(chan error)
 		msg.replyCh = replyCh
 	}
