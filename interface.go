@@ -17,6 +17,7 @@ const (
 	optkeySyncAppend      = "sync_append"
 	optkeyTagPrefix       = "tag_prefix"
 	optkeyTimestamp       = "timestamp"
+	optkeyWriteQueueSize  = "write_queue_size"
 	optkeyWriteThreshold  = "write_threshold"
 )
 

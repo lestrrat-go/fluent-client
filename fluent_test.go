@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -131,8 +130,13 @@ func (s *server) Run(ctx context.Context) {
 					} else {
 						decName = "msgpack"
 					}
-					log.Printf("failed to decode %s: %s", decName, err)
+					if pdebug.Enabled {
+						pdebug.Printf("test server: failed to decode %s: %s", decName, err)
+					}
 					if errors.Cause(err) == io.EOF {
+						if pdebug.Enabled {
+							pdebug.Printf("test server: EOF detected")
+						}
 						return
 					}
 					continue
@@ -240,7 +244,105 @@ func TestTagPrefix(t *testing.T) {
 	}
 }
 
-type badmsgpack struct {}
+func TestBufferFull(t *testing.T) {
+	s, err := newServer(false)
+	if !assert.NoError(t, err, "newServer should succeed") {
+		return
+	}
+	defer s.Close()
+
+	client, err := fluent.New(
+		fluent.WithNetwork(s.Network),
+		fluent.WithAddress(s.Address),
+		fluent.WithBufferLimit(256),
+		fluent.WithWriteThreshold(1),
+	)
+
+	count := 1
+	// Write until buffer is full.
+	if !assert.NoError(t, client.Post("tag_name", map[string]interface{}{"foo": 0}, fluent.WithSyncAppend(true)), "Post should succeed") {
+		return
+	}
+	for i := 1; ; i++ {
+		err := client.Post("tag_name", map[string]interface{}{"foo": i}, fluent.WithSyncAppend(true))
+		if fluent.IsBufferFull(err) {
+			break
+		}
+		count++
+	}
+
+	sctx, scancel := context.WithCancel(context.Background())
+	defer scancel()
+
+	// Start the server, which should start the writer process
+	go s.Run(sctx)
+
+	<-s.Ready()
+
+	// write one more message
+	var wroteOneMore bool
+	for i := 1; i < 10; i++ {
+		err := client.Post("tag_name", map[string]interface{}{"foo": i}, fluent.WithSyncAppend(true))
+		if err == nil {
+			count++
+			wroteOneMore = true
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if !assert.True(t, wroteOneMore, "expected to be able to write one more message") {
+		return
+	}
+
+	// wait for the server to process all of our messages
+	{
+		timeout := time.NewTimer(10 * time.Second)
+		defer timeout.Stop()
+		tick := time.NewTicker(10 * time.Millisecond)
+		defer tick.Stop()
+		for loop := true; loop; {
+			select {
+			case <-timeout.C:
+				t.Errorf("timed out while waiting for the server to process requests")
+			case <-tick.C:
+				if len(s.Payload) == count {
+					t.Logf("Got expected %d messages in the server", len(s.Payload))
+					loop = false
+				}
+			}
+		}
+	}
+
+	// See if we can still write after the buffer has been drained
+	s.Payload = s.Payload[0:0]
+	if !assert.NoError(t, client.Post("tag_name", map[string]interface{}{"foo": 1}, fluent.WithSyncAppend(true)), "writing after the buffer has been drained should succeed") {
+		return
+	}
+
+	// wait for the server to process all of our messages
+	{
+		timeout := time.NewTimer(10 * time.Second)
+		defer timeout.Stop()
+		tick := time.NewTicker(10 * time.Millisecond)
+		defer tick.Stop()
+		for loop := true; loop; {
+			select {
+			case <-timeout.C:
+				t.Errorf("timed out while waiting for the server to process requests")
+			case <-tick.C:
+				if len(s.Payload) == 1 {
+					t.Logf("Got expected %d messages in the server", len(s.Payload))
+					loop = false
+				}
+			}
+		}
+	}
+
+	client.Shutdown(nil)
+}
+
+type badmsgpack struct{}
+
 func (msg *badmsgpack) EncodeMsgpack(_ *msgpack.Encoder) error {
 	return errors.New(`badmsgpack`)
 }

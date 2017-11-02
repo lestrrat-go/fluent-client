@@ -9,15 +9,20 @@ import (
 	"github.com/pkg/errors"
 )
 
-// New creates a new client. Options may be:
+// New creates a new client. Options may be one of the following:
 //
-//   WithAddress: the address to connect to. default: 127.0.0.1:24224
-//   WithBufferLimit: the maximum pending buffer size. default: 8MB
-//   WithJSONMarshaler: use JSON serializer
-//   WithMsgpackMarshaler: use MessagePack serializer (default)
-//   WithNetwork: network type to use. default: tcp
-//   WithTagPrefix: tag prefix to append to all tags
-//   WithWriteThreshold: minimum number of bytes before starting to send to buffer to server
+//   * fluent.WithAddress
+//   * fluent.WithBufferLimit
+//   * fluent.WithDialTimeout
+//   * fluent.WithJSONMarshaler
+//   * fluent.WithMaxConnAttempts
+//   * fluent.WithMsgpackMarshaler
+//   * fluent.WithNetwork
+//   * fluent.WithTagPrefix
+//   * fluent.WithWriteThreshold
+//   * fluent.WithWriteQueueSize
+//
+// Please see their respective documentation for details.
 func New(options ...Option) (*Client, error) {
 	m, err := newMinion(options...)
 	if err != nil {
@@ -63,7 +68,11 @@ func New(options ...Option) (*Client, error) {
 //      hold this new data, an error will be returned
 //   2. If the marshaling into msgpack/json failed, it is returned
 //
-func (c *Client) Post(tag string, v interface{}, options ...Option) error {
+func (c *Client) Post(tag string, v interface{}, options ...Option) (err error) {
+	if pdebug.Enabled {
+		g := pdebug.Marker("fluent.Client.Post").BindError(&err)
+		defer g.End()
+	}
 	// Do not allow processing at all if we have closed
 	c.muClosed.RLock()
 	defer c.muClosed.RUnlock()
@@ -85,6 +94,9 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 		case optkeySubSecond:
 			subsecond = opt.Value().(bool)
 		case optkeyContext:
+			if pdebug.Enabled {
+				pdebug.Printf("client: using user-supplied context")
+			}
 			ctx = opt.Value().(context.Context)
 		}
 	}
@@ -102,8 +114,23 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 	// put back to the pool
 	var replyCh chan error
 	if syncAppend {
+		if pdebug.Enabled {
+			pdebug.Printf("client: synchronous append requested. creating channel")
+		}
 		replyCh = make(chan error)
 		msg.replyCh = replyCh
+	}
+
+	// Because case statements in a select is evaluated in random
+	// order, writing to c.minionQueue in the subsequent select
+	// may succeed or fail depending on the run.
+	//
+	// This extra check ensures that if the context is canceled
+	// well in advance, we never get into the ambiguous situation
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 	}
 
 	select {
@@ -112,6 +139,9 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 	case <-c.minionDone:
 		return errors.New("writer has been closed. Shutdown called?")
 	case c.minionQueue <- msg:
+		if pdebug.Enabled {
+			pdebug.Printf("client: wrote message to queue")
+		}
 	}
 
 	if syncAppend {
@@ -140,6 +170,10 @@ func (c *Client) Post(tag string, v interface{}, options ...Option) error {
 func (c *Client) Close() error {
 	c.muClosed.Lock()
 	c.closed = true
+	if c.minionQueue != nil {
+		close(c.minionQueue)
+		c.minionQueue = nil
+	}
 	c.muClosed.Unlock()
 
 	c.minionCancel()
