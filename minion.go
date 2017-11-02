@@ -144,7 +144,6 @@ func (m *minion) runReader(ctx context.Context) {
 			// m.incoming could have been closed already, so we should
 			// check if msg is legit
 			if msg != nil {
-				time.Sleep(50 * time.Millisecond)
 				m.appendMessage(msg)
 			}
 		}
@@ -234,7 +233,7 @@ func (m *minion) runWriter(ctx context.Context) {
 	defer close(m.done)
 
 	var conn net.Conn
-	defer func() {
+	defer func(conn net.Conn) {
 		// Make sure that this connection is closed.
 		if conn != nil {
 			if pdebug.Enabled {
@@ -242,7 +241,7 @@ func (m *minion) runWriter(ctx context.Context) {
 			}
 			conn.Close()
 		}
-	}()
+	}(conn)
 
 	expbackoff := backoff.NewExponentialBackOff()
 
