@@ -95,20 +95,21 @@ go test -run=none -bench=. -benchmem -tags bench
 ```
 
 ```
-BenchmarkK0kubun-4    	 1000000	      2675 ns/op	     976 B/op	      13 allocs/op
-BenchmarkLestrrat-4   	  500000	      3172 ns/op	     574 B/op	       6 allocs/op
-BenchmarkOfficial-4   	  100000	     13460 ns/op	     904 B/op	      10 allocs/op
+BenchmarkK0kubun-4    	 1000000	      3238 ns/op	     968 B/op	      12 allocs/op
+BenchmarkLestrrat-4   	  500000	      4725 ns/op	     730 B/op	      12 allocs/op
+BenchmarkOfficial-4   	  100000	     10226 ns/op	     896 B/op	       9 allocs/op
 PASS
-ok  	github.com/lestrrat/go-fluent-client	5.808s
+ok  	github.com/lestrrat/go-fluent-client	6.884s
 ```
 
 ## Versions
 
-| Library | Version |
+| Name | Version |
 |---------|---------|
-| github.com/lestrrat/go-fluent-client | 6a824f0090785222cfb6b710fdf2ae59d6da5e85 |
+| fluentd (td-agent) | 0.12.19 |
+| github.com/lestrrat/go-fluent-client | 23dbe4944e1c50b1f2be8b063bdf42bbb5ca42c8 |
 | github.com/k0kubun/fluent-logger-go | e1cfc57bb12c99d7207d43b942527c9450d14382 |
-| github.com/fluent/fluent-logger-golang | b8d749d6b17d9373c54c9f66b1f1c075a83bbfed |
+| github.com/fluent/fluent-logger-golang | a8dfe4adfeaf7b985acb486f6b060ff2f6a17e91 |
 
 ## Analysis 
 
@@ -116,17 +117,16 @@ ok  	github.com/lestrrat/go-fluent-client	5.808s
 
 #### Pros
 
-Lowest allocations/op.
+* Proper `Shutdown` method to flush buffers at the end.
+* Tried very hard to avoid any race conditions.
 
-Proper `Shutdown` method to flush buffers at the end.
-
-Tried very hard to avoid any race conditions.
+While `github.com/k0kubun/fluent-logger-go` is fastest, it does not check errors and does not handle some
+synchronization edge cases. This library goes on its way to check these things, and still manages to
+come almost as fast `github.com/k0kubun/fluent-logger-go`, is twice as fast as the official library.
 
 #### Cons
 
-I'm biased (duh).
-
-Very, very new and untested on the field.
+* I'm biased (duh).
 
 ### github.com/k0kubun/fluent-logger-go
 
@@ -163,6 +163,4 @@ The benchmark scores are pretty low. This could just be my benchmark, so please 
 
 Looking at the code, it looks non-gopher-ish. Use of `panic` is one such item. In Go you should avoid
 casual panics, which causes long-running daemons to write code like this https://github.com/moby/moby/blob/1325f667eeb42b717c2f9d369f2ee6d701a280e3/daemon/logger/fluentd/fluentd.go#L46-L49
-
-
 
