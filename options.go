@@ -156,3 +156,13 @@ func WithDialTimeout(d time.Duration) Option {
 		value: d,
 	}
 }
+
+// WithWriteQueueSize specifies the channel buffer size for the queue
+// used to pass messages from the Client to the background writer
+// goroutines. The default value is 64.
+func WithWriteQueueSize(n int) Option {
+	return &option{
+		name:  optkeyWriteQueueSize,
+		value: n,
+	}
+}

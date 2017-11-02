@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -131,8 +130,13 @@ func (s *server) Run(ctx context.Context) {
 					} else {
 						decName = "msgpack"
 					}
-					log.Printf("failed to decode %s: %s", decName, err)
+					if pdebug.Enabled {
+						pdebug.Printf("test server: failed to decode %s: %s", decName, err)
+					}
 					if errors.Cause(err) == io.EOF {
+						if pdebug.Enabled {
+							pdebug.Printf("test server: EOF detected")
+						}
 						return
 					}
 					continue
@@ -240,7 +244,8 @@ func TestTagPrefix(t *testing.T) {
 	}
 }
 
-type badmsgpack struct {}
+type badmsgpack struct{}
+
 func (msg *badmsgpack) EncodeMsgpack(_ *msgpack.Encoder) error {
 	return errors.New(`badmsgpack`)
 }

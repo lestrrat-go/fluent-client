@@ -59,10 +59,10 @@ type minion struct {
 	incoming        chan *Message
 	marshaler       marshaler
 	maxConnAttempts uint64
-	muFlush         sync.RWMutex
 	muPending       sync.RWMutex
 	network         string
 	pending         []byte
+	readerDone      chan struct{}
 	tagPrefix       string
 	writeThreshold  int
 	writeTimeout    time.Duration
@@ -75,14 +75,15 @@ func newMinion(options ...Option) (*minion, error) {
 		cond:            sync.NewCond(&sync.Mutex{}),
 		dialTimeout:     3 * time.Second,
 		done:            make(chan struct{}),
-		incoming:        make(chan *Message),
 		maxConnAttempts: 64,
 		marshaler:       marshalFunc(msgpackMarshal),
 		network:         "tcp",
+		readerDone:      make(chan struct{}),
 		writeThreshold:  8 * 1028,
 		writeTimeout:    3 * time.Second,
 	}
 
+	var writeQueueSize int = 64
 	for _, opt := range options {
 		switch opt.Name() {
 		case optkeyNetwork:
@@ -103,13 +104,16 @@ func newMinion(options ...Option) (*minion, error) {
 			m.marshaler = opt.Value().(marshaler)
 		case optkeyMaxConnAttempts:
 			m.maxConnAttempts = opt.Value().(uint64)
-		case optkeyWriteThreshold:
-			m.writeThreshold = opt.Value().(int)
 		case optkeyTagPrefix:
 			m.tagPrefix = opt.Value().(string)
+		case optkeyWriteQueueSize:
+			writeQueueSize = opt.Value().(int)
+		case optkeyWriteThreshold:
+			m.writeThreshold = opt.Value().(int)
 		}
 	}
 	m.pending = make([]byte, 0, m.bufferLimit)
+	m.incoming = make(chan *Message, writeQueueSize)
 
 	return m, nil
 }
@@ -121,27 +125,37 @@ func (m *minion) runReader(ctx context.Context) {
 		pdebug.Printf("background reader: starting")
 		defer pdebug.Printf("background reader: exiting")
 	}
+
+	defer close(m.readerDone)
+
 	// This goroutine receives the incoming data as fast as
 	// possible, so that the caller to enqueue does not block
-	for {
+	for loop := true; loop; {
 		select {
 		case <-ctx.Done():
 			// Wake up the writer goroutine so that it can detect
-			// cancelation. m.flush is used to tell the write that
-			// it should try really hard to write everything in the
-			// buffer before the program exits
-			m.muFlush.Lock()
-			m.flush = true
-			m.muFlush.Unlock()
-
+			// cancelation.
 			m.cond.Broadcast()
 			if pdebug.Enabled {
 				pdebug.Printf("background reader: cancel detected")
 			}
-			return
+			loop = false
 		case msg := <-m.incoming:
-			m.appendMessage(msg)
+			// m.incoming could have been closed already, so we should
+			// check if msg is legit
+			if msg != nil {
+				time.Sleep(50 * time.Millisecond)
+				m.appendMessage(msg)
+			}
 		}
+	}
+
+	// if we have more messages in the channel, we should try to flush them
+	for len(m.incoming) > 0 {
+		if pdebug.Enabled {
+			pdebug.Printf("background reader: flushing incoming buffer (%d left)", len(m.incoming))
+		}
+		m.appendMessage(<-m.incoming)
 	}
 }
 
@@ -201,6 +215,15 @@ func (m *minion) appendMessage(msg *Message) {
 	m.pending = append(m.pending, buf...)
 }
 
+func (m *minion) isReaderDone() bool {
+	select {
+	case <-m.readerDone:
+		return true
+	default:
+	}
+	return false
+}
+
 // This goroutine waits for the receiver goroutine to wake
 // it up. When it's awake, we know that there's at least one
 // piece of data to send to the fluentd server.
@@ -238,10 +261,9 @@ func (m *minion) runWriter(ctx context.Context) {
 		// status, otherwise we exit immediately
 
 		var connAttempts uint64
-		flush := m.isFlushMode()
 		for conn == nil {
 			if pdebug.Enabled {
-				if flush {
+				if m.isReaderDone() {
 					pdebug.Printf("background writer: attempting to connect in flush mode")
 				} else {
 					pdebug.Printf("background writer: attempting to connect")
@@ -249,7 +271,7 @@ func (m *minion) runWriter(ctx context.Context) {
 			}
 
 			parentCtx := ctx
-			if flush {
+			if m.isReaderDone() {
 				// In flush mode, we don't let a parent context to cancel us.
 				// we connect, or we die trying
 				parentCtx = context.Background()
@@ -277,12 +299,7 @@ func (m *minion) runWriter(ctx context.Context) {
 				break
 			}
 
-			// The flush mode may have changed while we were trying to
-			// connect, so update it.
-			if m.isFlushMode() {
-				flush = true
-			}
-			if flush {
+			if m.isReaderDone() {
 				connAttempts++
 				if m.maxConnAttempts > 0 && connAttempts > m.maxConnAttempts {
 					if pdebug.Enabled {
@@ -293,7 +310,7 @@ func (m *minion) runWriter(ctx context.Context) {
 			}
 		}
 
-		if flush {
+		if m.isReaderDone() {
 			if pdebug.Enabled {
 				pdebug.Printf("background writer: in flush mode, no deadline set")
 			}
@@ -307,11 +324,12 @@ func (m *minion) runWriter(ctx context.Context) {
 			conn = nil
 		}
 
-		if flush {
-			select {
-			case <-ctx.Done():
+		if m.isReaderDone() {
+			if !m.pendingAvailable(0) {
+				if pdebug.Enabled {
+					pdebug.Printf("background writer: pending buffer is empty, bailing out")
+				}
 				return
-			default:
 			}
 		}
 	}
@@ -375,12 +393,6 @@ func (m *minion) flushPending(conn net.Conn) error {
 		}
 	}
 	return nil
-}
-
-func (m *minion) isFlushMode() bool {
-	m.muFlush.RLock()
-	defer m.muFlush.RUnlock()
-	return m.flush
 }
 
 func (m *minion) writePending(conn net.Conn) (int, error) {
