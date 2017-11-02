@@ -56,7 +56,6 @@ type minion struct {
 	cond            *sync.Cond
 	dialTimeout     time.Duration
 	done            chan struct{}
-	flush           bool
 	incoming        chan *Message
 	marshaler       marshaler
 	maxConnAttempts uint64
