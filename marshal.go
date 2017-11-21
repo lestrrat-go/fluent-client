@@ -206,11 +206,7 @@ func (m *Message) DecodeMsgpack(d *msgpack.Decoder) error {
 }
 
 func msgpackMarshal(m *Message) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := msgpack.NewEncoder(&buf).Encode(m); err != nil {
-		return nil, errors.Wrap(err, `failed to encode msgpack`)
-	}
-	return buf.Bytes(), nil
+	return msgpack.Marshal(m)
 }
 
 func jsonMarshal(m *Message) ([]byte, error) {
