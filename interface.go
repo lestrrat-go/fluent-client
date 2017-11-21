@@ -1,6 +1,7 @@
 package fluent
 
 import (
+	"net"
 	"sync"
 	"time"
 )
@@ -23,6 +24,19 @@ const (
 
 type marshaler interface {
 	Marshal(*Message) ([]byte, error)
+}
+
+type Unbuffered struct {
+	address         string
+	conn            net.Conn
+	dialTimeout     time.Duration
+	marshaler       marshaler
+	maxConnAttempts uint64
+	mu              sync.RWMutex
+	network         string
+	subsecond       bool
+	tagPrefix       string
+	writeTimeout    time.Duration
 }
 
 // Client represents a fluentd client. The client receives data as we go,

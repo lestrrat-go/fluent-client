@@ -3,11 +3,120 @@ package fluent
 
 import (
 	"context"
+	"io"
+	"net"
 	"time"
 
 	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
 )
+
+// NewUnbuffered creates an unbuffered client. Unlike the normal
+// buffered client, an unbuffered client handles the Post() method
+// synchronously, and does not attempt to buffer the payload.
+func NewUnbuffered(options ...Option) *Unbuffered {
+	var c = &Unbuffered{
+		address:         "127.0.0.1:24224",
+		dialTimeout:     3 * time.Second,
+		maxConnAttempts: 64,
+		marshaler:       marshalFunc(msgpackMarshal),
+		network:         "tcp",
+		writeTimeout:    3 * time.Second,
+	}
+
+	for _, opt := range options {
+		switch opt.Name() {
+		case optkeyAddress:
+			c.address = opt.Value().(string)
+		case optkeyDialTimeout:
+			c.dialTimeout = opt.Value().(time.Duration)
+		case optkeyMarshaler:
+			c.marshaler = opt.Value().(marshaler)
+		case optkeyMaxConnAttempts:
+			c.maxConnAttempts = opt.Value().(uint64)
+		case optkeyNetwork:
+			c.network = opt.Value().(string)
+		case optkeySubSecond:
+			c.subsecond = opt.Value().(bool)
+		case optkeyTagPrefix:
+			c.tagPrefix = opt.Value().(string)
+		}
+	}
+
+	return c
+}
+
+func (c *Unbuffered) connect(force bool) (net.Conn, error) {
+	c.mu.Lock()
+	defer c.mu.RUnlock()
+
+	if !force && c.conn != nil {
+		return c.conn, nil
+	}
+
+	connCtx, cancel := context.WithTimeout(context.Background(), c.dialTimeout)
+	defer cancel()
+
+	var dialer net.Dialer
+	conn, err := dialer.DialContext(connCtx, c.network, c.address)
+	if err != nil {
+		return nil, errors.Wrap(err, `failed to connect to server`)
+	}
+
+	c.conn = conn
+	return conn, nil
+}
+
+func (c *Unbuffered) Post(tag string, v interface{}, options ...Option) (err error) {
+	var t time.Time
+	for _, opt := range options {
+		switch opt.Name() {
+		case optkeyTimestamp:
+			t = opt.Value().(time.Time)
+		}
+	}
+
+	msg := getMessage()
+	msg.Tag = tag
+	msg.Time.Time = t
+	msg.Record = v
+	msg.subsecond = c.subsecond
+
+	serialized, err := c.marshaler.Marshal(msg)
+	if err != nil {
+		return errors.Wrap(err, `failed to serialize payload`)
+	}
+
+	maxConnAttempts := c.maxConnAttempts
+
+WRITE:
+	payload := serialized
+	if maxConnAttempts <= 0 {
+		return errors.New(`frobwiz`)
+	}
+
+	conn, err := c.connect(maxConnAttempts == c.maxConnAttempts)
+	if err != nil {
+		maxConnAttempts--
+		goto WRITE
+	}
+
+	for len(payload) > 0 {
+		n, err := conn.Write(payload)
+		if err != nil {
+			if err == io.EOF {
+				maxConnAttempts--
+				goto WRITE // Try again
+			}
+
+			return errors.Wrap(err, `failed to write serialized payload`)
+		}
+		payload = payload[n:]
+	}
+
+	// All done!
+	return nil
+}
 
 // New creates a new client. Options may be one of the following:
 //
@@ -35,7 +144,7 @@ func New(options ...Option) (*Client, error) {
 	var subsecond bool
 	for _, opt := range options {
 		switch opt.Name() {
-		case "subsecond":
+		case optkeySubSecond:
 			subsecond = opt.Value().(bool)
 		}
 	}
