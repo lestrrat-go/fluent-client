@@ -1,6 +1,7 @@
 package fluent
 
 import (
+	"context"
 	"net"
 	"sync"
 	"time"
@@ -8,6 +9,7 @@ import (
 
 const (
 	optkeyAddress         = "address"
+	optkeyBuffered        = "buffered"
 	optkeyBufferLimit     = "buffer_limit"
 	optkeyContext         = "context"
 	optkeyDialTimeout     = "dial_timeout"
@@ -42,7 +44,13 @@ type Unbuffered struct {
 // Client represents a fluentd client. The client receives data as we go,
 // and proxies it to a background minion. The background minion attempts to
 // write to the server as soon as possible
-type Client struct {
+type Client interface {
+	Post(string, interface{}, ...Option) error
+	Close() error
+	Shutdown(context.Context) error
+}
+
+type Buffered struct {
 	closed       bool
 	minionCancel func()
 	minionDone   chan struct{}

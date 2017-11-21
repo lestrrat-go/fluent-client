@@ -3,6 +3,7 @@ package fluent_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -84,6 +85,9 @@ func (s *server) Run(ctx context.Context) {
 	go func() {
 		select {
 		case <-ctx.Done():
+			if pdebug.Enabled {
+				pdebug.Printf("context.Context is done, closing listeners")
+			}
 			s.listener.Close()
 		}
 	}()
@@ -106,45 +110,77 @@ func (s *server) Run(ctx context.Context) {
 		}
 
 		once.Do(func() { close(s.ready) })
-		conn, err := s.listener.Accept()
-		if err != nil {
-			return
-		}
-
-		var dec func(interface{}) error
-		if s.useJSON {
-			dec = json.NewDecoder(conn).Decode
-		} else {
-			dec = msgpack.NewDecoder(conn).Decode
-		}
-
 		readerCh := make(chan *fluent.Message)
 		go func(ch chan *fluent.Message) {
+			if pdebug.Enabled {
+				defer pdebug.Printf("bailing out of server reader")
+			}
+		ACCEPT:
 			for {
-				conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-				var v fluent.Message
-				if err := dec(&v); err != nil {
-					var decName string
-					if s.useJSON {
-						decName = "json"
-					} else {
-						decName = "msgpack"
-					}
-					if pdebug.Enabled {
-						pdebug.Printf("test server: failed to decode %s: %s", decName, err)
-					}
-					if errors.Cause(err) == io.EOF {
-						if pdebug.Enabled {
-							pdebug.Printf("test server: EOF detected")
-						}
-						return
-					}
-					continue
-				}
 				select {
 				case <-ctx.Done():
 					return
-				case ch <- &v:
+				default:
+				}
+				conn, err := s.listener.Accept()
+				if err != nil {
+					if pdebug.Enabled {
+						pdebug.Printf("Failed to accept: %s", err)
+					}
+					return
+				}
+
+				if pdebug.Enabled {
+					pdebug.Printf("Accepted new connection")
+				}
+
+				var dec func(interface{}) error
+				if s.useJSON {
+					dec = json.NewDecoder(conn).Decode
+				} else {
+					dec = msgpack.NewDecoder(conn).Decode
+				}
+
+				for {
+					if pdebug.Enabled {
+						pdebug.Printf("waiting for next message...")
+					}
+					// conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+					var v fluent.Message
+					if err := dec(&v); err != nil {
+						var decName string
+						if s.useJSON {
+							decName = "json"
+						} else {
+							decName = "msgpack"
+						}
+						if pdebug.Enabled {
+							pdebug.Printf("test server: failed to decode %s: %s", decName, err)
+						}
+						if errors.Cause(err) == io.EOF {
+							if pdebug.Enabled {
+								pdebug.Printf("test server: EOF detected")
+							}
+							conn.Close()
+							continue ACCEPT
+						}
+						continue
+					}
+
+					if pdebug.Enabled {
+						pdebug.Printf("Read new fluet.Message")
+					}
+					select {
+					case <-ctx.Done():
+						if pdebug.Enabled {
+							pdebug.Printf("bailing out of read loop")
+						}
+						return
+					case ch <- &v:
+						if pdebug.Enabled {
+							pdebug.Printf("Sent new message to read channel")
+						}
+					}
 				}
 			}
 		}(readerCh)
@@ -266,6 +302,9 @@ func TestBufferFull(t *testing.T) {
 	for i := 1; ; i++ {
 		err := client.Post("tag_name", map[string]interface{}{"foo": i}, fluent.WithSyncAppend(true))
 		if fluent.IsBufferFull(err) {
+			if pdebug.Enabled {
+				pdebug.Printf("Detected full buffer. Stopping Post() loop")
+			}
 			break
 		}
 		count++
@@ -282,13 +321,16 @@ func TestBufferFull(t *testing.T) {
 	// write one more message
 	var wroteOneMore bool
 	for i := 1; i < 10; i++ {
+		if pdebug.Enabled {
+			pdebug.Printf("Writing one more message...")
+		}
 		err := client.Post("tag_name", map[string]interface{}{"foo": i}, fluent.WithSyncAppend(true))
 		if err == nil {
 			count++
 			wroteOneMore = true
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(500 * time.Millisecond)
 	}
 	if !assert.True(t, wroteOneMore, "expected to be able to write one more message") {
 		return
@@ -304,6 +346,7 @@ func TestBufferFull(t *testing.T) {
 			select {
 			case <-timeout.C:
 				t.Errorf("timed out while waiting for the server to process requests")
+				return // Don't forget to return
 			case <-tick.C:
 				if len(s.Payload) == count {
 					t.Logf("Got expected %d messages in the server", len(s.Payload))
@@ -313,6 +356,9 @@ func TestBufferFull(t *testing.T) {
 		}
 	}
 
+	if pdebug.Enabled {
+		pdebug.Printf("Writing one more after draining")
+	}
 	// See if we can still write after the buffer has been drained
 	s.Payload = s.Payload[0:0]
 	if !assert.NoError(t, client.Post("tag_name", map[string]interface{}{"foo": 1}, fluent.WithSyncAppend(true)), "writing after the buffer has been drained should succeed") {
@@ -418,103 +464,110 @@ func TestPostRoundtrip(t *testing.T) {
 		&Payload{Foo: "foo", Bar: "bar"},
 	}
 
-	for _, marshalerName := range []string{"json", "msgpack", "msgpack-subsecond"} {
-		var useJSON bool
-		var options []fluent.Option
-		switch marshalerName {
-		case "json":
-			useJSON = true
-			options = append(options, fluent.WithJSONMarshaler())
-		case "msgpack":
-			options = append(options, fluent.WithMsgpackMarshaler())
-		case "msgpack-subsecond":
-			options = append(options, fluent.WithMsgpackMarshaler())
-			options = append(options, fluent.WithSubsecond(true))
-		}
-
-		t.Run("marshaler="+marshalerName, func(t *testing.T) {
-			// This is used for global cancel/teardown
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			s, err := newServer(useJSON)
-			if !assert.NoError(t, err, "newServer should succeed") {
-				return
+	for _, buffered := range []bool{true, false} {
+		t.Run(fmt.Sprintf("buffered=%t", buffered), func(t *testing.T) {
+			var options []fluent.Option
+			if !buffered {
+				options = append(options, fluent.WithBuffered(false))
 			}
-			defer s.Close()
-
-			// This is just to stop the server
-			sctx, scancel := context.WithCancel(context.Background())
-			go s.Run(sctx)
-
-			<-s.Ready()
-
-			client, err := fluent.New(
-				append([]fluent.Option{
-					fluent.WithNetwork(s.Network),
-					fluent.WithAddress(s.Address),
-				}, options...)...,
-			)
-			if !assert.NoError(t, err, "failed to create fluent client") {
-				return
-			}
-			defer client.Shutdown(nil)
-
-			for _, data := range testcases {
-				err := client.Post("tag_name", data, fluent.WithTimestamp(time.Unix(1482493046, 0).UTC()))
-				if !assert.NoError(t, err, "client.Post should succeed") {
-					return
+			for _, marshalerName := range []string{"json", "msgpack", "msgpack-subsecond"} {
+				var useJSON bool
+				switch marshalerName {
+				case "json":
+					useJSON = true
+					options = append(options, fluent.WithJSONMarshaler())
+				case "msgpack":
+					options = append(options, fluent.WithMsgpackMarshaler())
+				case "msgpack-subsecond":
+					options = append(options, fluent.WithMsgpackMarshaler())
+					options = append(options, fluent.WithSubsecond(true))
 				}
-			}
-			client.Shutdown(nil)
 
-			time.Sleep(time.Second)
-			scancel()
-			if pdebug.Enabled {
-				pdebug.Printf("canceled server context")
-			}
+				t.Run("marshaler="+marshalerName, func(t *testing.T) {
+					// This is used for global cancel/teardown
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
 
-			select {
-			case <-ctx.Done():
-				t.Errorf("context canceled: %s", ctx.Err())
-				return
-			case <-s.Done():
-			}
-
-			if !assert.Len(t, s.Payload, len(testcases)) {
-				return
-			}
-
-			for i, data := range testcases {
-				// If data is not a map, we would need to convert it
-				var payload interface{}
-				if _, ok := data.(map[string]interface{}); ok {
-					payload = data
-				} else {
-					var marshaler func(interface{}) ([]byte, error)
-					var unmarshaler func([]byte, interface{}) error
-					if useJSON {
-						marshaler = json.Marshal
-						unmarshaler = json.Unmarshal
-					} else {
-						marshaler = msgpack.Marshal
-						unmarshaler = msgpack.Unmarshal
-					}
-					buf, err := marshaler(data)
-					if !assert.NoError(t, err, "Marshal should succeed") {
+					s, err := newServer(useJSON)
+					if !assert.NoError(t, err, "newServer should succeed") {
 						return
 					}
-					if !assert.NoError(t, unmarshaler(buf, &payload), "Unmarshal should succeed") {
+					defer s.Close()
+
+					// This is just to stop the server
+					sctx, scancel := context.WithCancel(context.Background())
+					go s.Run(sctx)
+
+					<-s.Ready()
+
+					client, err := fluent.New(
+						append([]fluent.Option{
+							fluent.WithNetwork(s.Network),
+							fluent.WithAddress(s.Address),
+						}, options...)...,
+					)
+					if !assert.NoError(t, err, "failed to create fluent client") {
 						return
 					}
-				}
+					defer client.Shutdown(nil)
 
-				if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: fluent.EventTime{Time: time.Unix(1482493046, 0).UTC()},
-					Record: payload}, s.Payload[i]) {
-					return
-				}
+					for _, data := range testcases {
+						err := client.Post("tag_name", data, fluent.WithTimestamp(time.Unix(1482493046, 0).UTC()))
+						if !assert.NoError(t, err, "client.Post should succeed") {
+							return
+						}
+					}
+					client.Shutdown(nil)
+
+					time.Sleep(time.Second)
+					scancel()
+					if pdebug.Enabled {
+						pdebug.Printf("canceled server context")
+					}
+
+					select {
+					case <-ctx.Done():
+						t.Errorf("context canceled: %s", ctx.Err())
+						return
+					case <-s.Done():
+					}
+
+					if !assert.Len(t, s.Payload, len(testcases)) {
+						return
+					}
+
+					for i, data := range testcases {
+						// If data is not a map, we would need to convert it
+						var payload interface{}
+						if _, ok := data.(map[string]interface{}); ok {
+							payload = data
+						} else {
+							var marshaler func(interface{}) ([]byte, error)
+							var unmarshaler func([]byte, interface{}) error
+							if useJSON {
+								marshaler = json.Marshal
+								unmarshaler = json.Unmarshal
+							} else {
+								marshaler = msgpack.Marshal
+								unmarshaler = msgpack.Unmarshal
+							}
+							buf, err := marshaler(data)
+							if !assert.NoError(t, err, "Marshal should succeed") {
+								return
+							}
+							if !assert.NoError(t, unmarshaler(buf, &payload), "Unmarshal should succeed") {
+								return
+							}
+						}
+
+						if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: fluent.EventTime{Time: time.Unix(1482493046, 0).UTC()},
+							Record: payload}, s.Payload[i]) {
+							return
+						}
+					}
+
+				})
 			}
-
 		})
 	}
 }

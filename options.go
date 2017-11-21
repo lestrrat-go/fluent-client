@@ -18,6 +18,15 @@ func (o *option) Value() interface{} {
 	return o.value
 }
 
+// WithBuffered specifies if we should create a buffered
+// or unbuffered client
+func WithBuffered(b bool) Option {
+	return &option{
+		name:  optkeyBuffered,
+		value: b,
+	}
+}
+
 // WithNetwork specifies the network type, i.e. "tcp" or "unix"
 // for `fluent.New`
 func WithNetwork(s string) Option {
