@@ -462,6 +462,7 @@ func TestPostRoundtrip(t *testing.T) {
 		map[string]interface{}{"fuga": "bar", "hoge": "fuga"},
 		Payload{Foo: "foo", Bar: "bar"},
 		&Payload{Foo: "foo", Bar: "bar"},
+		"hogehoge",
 	}
 
 	for _, buffered := range []bool{true, false} {
@@ -560,8 +561,7 @@ func TestPostRoundtrip(t *testing.T) {
 							}
 						}
 
-						if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: fluent.EventTime{Time: time.Unix(1482493046, 0).UTC()},
-							Record: payload}, s.Payload[i]) {
+						if !assert.Equal(t, &fluent.Message{Tag: "tag_name", Time: fluent.EventTime{Time: time.Unix(1482493046, 0).UTC()}, Record: payload}, s.Payload[i]) {
 							return
 						}
 					}
