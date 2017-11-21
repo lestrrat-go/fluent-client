@@ -126,6 +126,9 @@ func (c *Unbuffered) Post(tag string, v interface{}, options ...Option) (err err
 		}
 	}
 
+	if t.IsZero() {
+		t = time.Now()
+	}
 	msg := getMessage()
 	msg.Tag = tag
 	msg.Time.Time = t
@@ -146,7 +149,7 @@ WRITE:
 	}
 	payload := serialized
 	if attempt > c.maxConnAttempts {
-		return errors.New(`frobwiz`)
+		return errors.New(`exceeded max connection attempts`)
 	}
 
 	conn, err := c.connect(attempt > 1)
