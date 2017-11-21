@@ -1,5 +1,15 @@
 package fluent
 
+import (
+	"context"
+	"io"
+	"net"
+	"time"
+
+	pdebug "github.com/lestrrat/go-pdebug"
+	"github.com/pkg/errors"
+)
+
 // NewUnbuffered creates an unbuffered client. Unlike the normal
 // buffered client, an unbuffered client handles the Post() method
 // synchronously, and does not attempt to buffer the payload.
@@ -169,5 +179,3 @@ WRITE:
 	// All done!
 	return nil
 }
-
-

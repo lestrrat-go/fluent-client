@@ -1,5 +1,13 @@
 package fluent
 
+import (
+	"context"
+	"time"
+
+	pdebug "github.com/lestrrat/go-pdebug"
+	"github.com/pkg/errors"
+)
+
 // NewBuffered creates a new Buffered client.
 // Options may be one of the following:
 //
@@ -200,4 +208,3 @@ func (c *Buffered) Shutdown(ctx context.Context) error {
 		return nil
 	}
 }
-

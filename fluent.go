@@ -1,16 +1,6 @@
 // Package fluent implements a client for the fluentd data logging daemon.
 package fluent
 
-import (
-	"context"
-	"io"
-	"net"
-	"time"
-
-	pdebug "github.com/lestrrat/go-pdebug"
-	"github.com/pkg/errors"
-)
-
 // New creates a new client. By default a buffered client is created.
 // The `WithBufered` option switches which type of client is created.
 // `WithBuffered(true)` (default) creates a buffered client, and
