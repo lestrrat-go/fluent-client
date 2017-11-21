@@ -95,11 +95,12 @@ go test -run=none -bench=. -benchmem -tags bench
 ```
 
 ```
-BenchmarkK0kubun-4    	 1000000	      3238 ns/op	     968 B/op	      12 allocs/op
-BenchmarkLestrrat-4   	  500000	      4725 ns/op	     730 B/op	      12 allocs/op
-BenchmarkOfficial-4   	  100000	     10226 ns/op	     896 B/op	       9 allocs/op
+BenchmarkK0kubun-4              	 1000000	      2723 ns/op	     968 B/op	      11 allocs/op
+BenchmarkLestrrat-4             	  500000	      3661 ns/op	     530 B/op	       7 allocs/op
+BenchmarkLestrratUnbuffered-4   	  200000	      9438 ns/op	     512 B/op	       7 allocs/op
+BenchmarkOfficial-4             	  200000	     10990 ns/op	     896 B/op	       9 allocs/op
 PASS
-ok  	github.com/lestrrat/go-fluent-client	6.884s
+ok  	github.com/lestrrat/go-fluent-client	8.952s
 ```
 
 ## Versions
@@ -107,7 +108,7 @@ ok  	github.com/lestrrat/go-fluent-client	6.884s
 | Name | Version |
 |---------|---------|
 | fluentd (td-agent) | 0.12.19 |
-| github.com/lestrrat/go-fluent-client | 23dbe4944e1c50b1f2be8b063bdf42bbb5ca42c8 |
+| github.com/lestrrat/go-fluent-client | 57ffea62d908367039b3fdf45c21fa30e29e352e |
 | github.com/k0kubun/fluent-logger-go | e1cfc57bb12c99d7207d43b942527c9450d14382 |
 | github.com/fluent/fluent-logger-golang | a8dfe4adfeaf7b985acb486f6b060ff2f6a17e91 |
 
@@ -117,12 +118,18 @@ ok  	github.com/lestrrat/go-fluent-client	6.884s
 
 #### Pros
 
+* Lowest allocations per op
 * Proper `Shutdown` method to flush buffers at the end.
 * Tried very hard to avoid any race conditions.
+* Has buffered/unbuffered clients
 
 While `github.com/k0kubun/fluent-logger-go` is fastest, it does not check errors and does not handle some
 synchronization edge cases. This library goes on its way to check these things, and still manages to
 come almost as fast `github.com/k0kubun/fluent-logger-go`, is twice as fast as the official library.
+
+The buffered client is the default, but you may use the unbuffered client, which does not keep
+the payload in an internal buffer before sending to the server. This is slightly more inefficient,
+but has the advantage of allowing you to handle errors more gracefully.
 
 #### Cons
 
