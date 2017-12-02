@@ -86,6 +86,22 @@ if err := client.Post(tagName, payload, fluent.WithSyncAppend(true)); err != nil
 }
 ```
 
+## Buffered/Unbuffered clients
+
+By default, we create a "buffered" client. This means that we enqueue the data to be sent to the fluentd process locally until we can actually connect and send them. However, since this decouples the user from the actual timing when the message is sent to the server, it may not be a suitable solution in cases where immediate action must be taken in case a message could not be sent.
+
+If you must detect if a message has been successfully sent to the fluentd server *immediately*, use the Unbuffered client by passing the `fluent.WithBuffered` option to the constructor:
+
+```go
+client, err := fluent.New(
+  fluent.WithAddress("fluent.example.com"),
+  fluent.WithBuffered(false), // Use the unbuffered client
+)
+```
+
+The behavior will change as described above, but the interface is still the same.
+
+
 # BENCHMARKS
 
 instructions: make sure you have the required fluentd clients, start fluentd at 127.0.0.1:24224, and run
@@ -125,7 +141,7 @@ ok  	github.com/lestrrat/go-fluent-client	8.952s
 
 While `github.com/k0kubun/fluent-logger-go` is fastest, it does not check errors and does not handle some
 synchronization edge cases. This library goes on its way to check these things, and still manages to
-come almost as fast `github.com/k0kubun/fluent-logger-go`, is twice as fast as the official library.
+come almost as fast as `github.com/k0kubun/fluent-logger-go`, whihch is several times faster as the official library.
 
 The buffered client is the default, but you may use the unbuffered client, which does not keep
 the payload in an internal buffer before sending to the server. This is slightly more inefficient,
