@@ -209,12 +209,10 @@ func (c *Buffered) Shutdown(ctx context.Context) error {
 }
 
 // Synchronously send a ping message
-func (c *Buffered) Ping(tag string, record interface{}, options ...Option) error {
-	// Do not allow processing at all if we have closed
-	c.muClosed.RLock()
-	if c.closed {
-  c.muClosed.RUnlock()
-		return errors.New(`client has already been closed`)
+func (c *Buffered) Ping(tag string, record interface{}, options ...Option) (err error) {
+	if pdebug.Enabled {
+		g := pdebug.Marker("Buffered.Ping").BindError(&err)
+		defer g.End()
 	}
 
 	var ctx context.Context = context.Background()
@@ -238,10 +236,25 @@ func (c *Buffered) Ping(tag string, record interface{}, options ...Option) error
 	}
 
 	msg := makeMessage(tag, record, t, subsecond, true)
+
+	// Do not allow processing at all if we have closed
+	c.muClosed.RLock()
+	if c.closed {
+		c.muClosed.RUnlock()
+		return errors.New(`client has already been closed`)
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("Sending to ping queue")
+	}
 	c.pingQueue <- msg
-  c.muClosed.RUnlock()
+	c.muClosed.RUnlock()
 
 	replyCh := msg.replyCh
+
+	if pdebug.Enabled {
+		pdebug.Printf("Waiting for synchronous ping response...")
+	}
 
 	select {
 	case <-ctx.Done():
