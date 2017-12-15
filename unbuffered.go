@@ -143,10 +143,6 @@ func (c *Unbuffered) Post(tag string, v interface{}, options ...Option) (err err
 	msg := makeMessage(tag, v, t, c.subsecond, false)
 	defer releaseMessage(msg)
 
-	return c.send(msg)
-}
-
-func (c *Unbuffered) send(msg *Message) error {
 	serialized, err := c.marshaler.Marshal(msg)
 	if err != nil {
 		return errors.Wrap(err, `failed to serialize payload`)
@@ -194,26 +190,13 @@ WRITE:
 	return nil
 }
 
+// Ping sends a ping message. A ping for an unbuffered client is completely
+// analogous to sending a message with Post
 func (c *Unbuffered) Ping(tag string, v interface{}, options ...Option) (err error) {
 	if pdebug.Enabled {
 		g := pdebug.Marker("fluent.Unbuffered.Ping").BindError(&err)
 		defer g.End()
 	}
 
-	var t time.Time
-	for _, opt := range options {
-		switch opt.Name() {
-		case optkeyTimestamp:
-			t = opt.Value().(time.Time)
-		}
-	}
-
-	if t.IsZero() {
-		t = time.Now()
-	}
-
-	msg := makeMessage(tag, v, t, c.subsecond, true)
-	defer releaseMessage(msg)
-
-	return c.send(msg)
+	return c.Post(tag, v, options...)
 }
