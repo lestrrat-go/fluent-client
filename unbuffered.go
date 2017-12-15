@@ -66,8 +66,6 @@ func NewUnbuffered(options ...Option) (client *Unbuffered, err error) {
 		}
 	}
 
-	pdebug.Printf("connectOnStart = %t", connectOnStart)
-
 	if connectOnStart {
 		if _, err := c.connect(true); err != nil {
 			return nil, errors.Wrap(err, `failed to connect on start`)
