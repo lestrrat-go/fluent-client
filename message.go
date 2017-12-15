@@ -23,6 +23,25 @@ func makeMessage(tag string, record interface{}, t time.Time, useSubsecond, need
 	return msg
 }
 
+func (m *Message) clear() {
+	if pdebug.Enabled {
+		g := pdebug.Marker("Message.clear")
+		defer g.End()
+	}
+
+	m.Tag = ""
+	m.Time = EventTime{}
+	m.Record = nil
+	m.Option = nil
+	if m.replyCh != nil {
+		if pdebug.Enabled {
+			pdebug.Printf("Closing reply channel")
+		}
+		close(m.replyCh)
+		m.replyCh = nil
+	}
+}
+
 // UnmarshalJSON deserializes from a JSON buffer and populates
 // a Message struct appropriately
 func (m *Message) UnmarshalJSON(buf []byte) error {
