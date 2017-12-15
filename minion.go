@@ -207,6 +207,9 @@ func (m *minion) ping(msg *Message) (err error) {
 	defer releaseMessage(msg)
 	defer func() {
 		if err != nil {
+			if pdebug.Enabled {
+				pdebug.Printf("Replying back with an error message (%s)", err)
+			}
 			msg.replyCh <- err
 		}
 	}()
