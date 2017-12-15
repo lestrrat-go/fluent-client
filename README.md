@@ -101,6 +101,31 @@ client, err := fluent.New(
 
 The behavior will change as described above, but the interface is still the same.
 
+# OPTIONS (fluent.New)
+
+| Name | Short Description | Default Value | Bufferd | Unbuffered |
+|:-----|:------------------|:--------------|:--------|:-----------|
+| fluent.WithBuffered(bool)             | Use buffered/unbuffered client      | true              | - | - | 
+| fluent.WithNetwork(string)            | Network type of address             | "tcp"             | Y | Y |
+| fluent.WithAddress(string)            | Address to connect to               | "127.0.0.1:24224" | Y | Y |
+| fluent.WithJSONMarshaler()            | Use JSON as serialization format    | -                 | Y | Y |
+| fluent.WithMsgpackMarshaler()         | Use msgpack as serialization format | used by default   | Y | Y |
+| fluent.WithTagPrefix(string)          | Tag prefix to prepend               | -                 | Y | Y |
+| fluent.WithDialTimeout(time.Duration) | Timeout value when connecting       | 3 * time.Second   | Y | Y |
+| fluent.WithConnectOnStart(bool)       | Attempt to connect immediately      | false             | Y | Y |
+| fluent.WithSubsecond(bool)            | Use EventTime                       | false             | Y | Y |
+| fluent.WithBufferLimit(int)           | Max buffer size to store            | 8 * 1024 * 1024   | Y | N |
+| fluent.WithWriteThreshold(int)        | Min buffer size before writes start | 8 * 1024          | Y | N |
+| fluent.WithMaxConnAttempts(int)       | Max attempts to make during close   | 64                | Y | N |
+| fluent.WithWriteQueueSize(int)        | Channel size for background reader  | 64                | Y | N |
+
+# OPTIONS ((fluent.Client).Post)
+
+| Name | Short Description | Default Value | Bufferd | Unbuffered |
+|:-----|:------------------|:--------------|:--------|:-----------|
+| fluent.WithTimestamp(time.Time)     | Timestamp to use for message        | current time      | Y | Y |
+| fluent.WithContext(context.Context) | Context to use                      | none              | Y | N |
+| fluent.WithSyncAppend(bool)         | Return failure if appending fails   | false             | Y | N |
 
 # BENCHMARKS
 

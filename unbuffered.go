@@ -23,7 +23,12 @@ import (
 //    * fluent.WithTagPrefix
 //
 // Please see their respective documentation for details.
-func NewUnbuffered(options ...Option) (*Unbuffered, error) {
+func NewUnbuffered(options ...Option) (client *Unbuffered, err error) {
+	if pdebug.Enabled {
+		g := pdebug.Marker("fluent.NewUnbuffered").BindError(&err)
+		defer g.End()
+	}
+
 	var c = &Unbuffered{
 		address:         "127.0.0.1:24224",
 		dialTimeout:     3 * time.Second,
@@ -33,6 +38,7 @@ func NewUnbuffered(options ...Option) (*Unbuffered, error) {
 		writeTimeout:    3 * time.Second,
 	}
 
+	var connectOnStart bool
 	for _, opt := range options {
 		switch opt.Name() {
 		case optkeyAddress:
@@ -55,6 +61,16 @@ func NewUnbuffered(options ...Option) (*Unbuffered, error) {
 			c.subsecond = opt.Value().(bool)
 		case optkeyTagPrefix:
 			c.tagPrefix = opt.Value().(string)
+		case optkeyConnectOnStart:
+			connectOnStart = opt.Value().(bool)
+		}
+	}
+
+pdebug.Printf("connectOnStart = %t", connectOnStart)
+
+	if connectOnStart {
+		if _, err := c.connect(true); err != nil {
+			return nil, errors.Wrap(err, `failed to connect on start`)
 		}
 	}
 
@@ -92,13 +108,9 @@ func (c *Unbuffered) connect(force bool) (net.Conn, error) {
 		c.conn.Close()
 	}
 
-	connCtx, cancel := context.WithTimeout(context.Background(), c.dialTimeout)
-	defer cancel()
-
-	var dialer net.Dialer
-	conn, err := dialer.DialContext(connCtx, c.network, c.address)
+	conn, err := dial(context.Background(), c.network, c.address, c.dialTimeout)
 	if err != nil {
-		return nil, errors.Wrap(err, `failed to connect to server`)
+		return nil, err
 	}
 
 	c.conn = conn

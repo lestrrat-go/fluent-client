@@ -84,6 +84,7 @@ func newMinion(options ...Option) (*minion, error) {
 	}
 
 	var writeQueueSize int = 64
+	var connectOnStart bool
 	for _, opt := range options {
 		switch opt.Name() {
 		case optkeyNetwork:
@@ -110,8 +111,22 @@ func newMinion(options ...Option) (*minion, error) {
 			writeQueueSize = opt.Value().(int)
 		case optkeyWriteThreshold:
 			m.writeThreshold = opt.Value().(int)
+		case optkeyConnectOnStart:
+			connectOnStart = opt.Value().(bool)
 		}
 	}
+
+pdebug.Printf("connectOnStart = %t", connectOnStart)
+
+	// if requested, connect to the server
+	if connectOnStart {
+		conn, err := dial(context.Background(), m.network, m.address, m.dialTimeout)
+		if err != nil {
+			return nil, errors.Wrap(err, `failed to connect on start`)
+		}
+		defer conn.Close()
+	}
+
 	m.buffer = make([]byte, 0, m.bufferLimit)
 	m.pending = m.buffer
 	if pdebug.Enabled {
@@ -285,13 +300,12 @@ func (m *minion) runWriter(ctx context.Context) {
 				parentCtx = context.Background()
 			}
 
-			connCtx, cancel := context.WithTimeout(parentCtx, m.dialTimeout)
-			b := backoff.WithContext(expbackoff, connCtx)
-			var dialer net.Dialer
+			retryCtx, cancel := context.WithTimeout(parentCtx, m.dialTimeout)
+			b := backoff.WithContext(expbackoff, retryCtx)
 			backoff.Retry(func() error {
-				var err error
-				conn, err = dialer.DialContext(connCtx, m.network, m.address)
-				return err
+				var dialerr error
+				conn, dialerr = dial(parentCtx, m.network, m.address, m.dialTimeout)
+				return dialerr
 			}, b)
 			cancel()
 

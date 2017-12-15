@@ -12,6 +12,7 @@ const (
 	optkeyBuffered        = "buffered"
 	optkeyBufferLimit     = "buffer_limit"
 	optkeyContext         = "context"
+	optkeyConnectOnStart  = "connect_on_start"
 	optkeyDialTimeout     = "dial_timeout"
 	optkeyMarshaler       = "marshaler"
 	optkeyMaxConnAttempts = "max_conn_attempts"
