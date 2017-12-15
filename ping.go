@@ -13,7 +13,7 @@ import (
 //
 // If you need to capture ping failures, pass it a channel using WithPingResultChan
 func Ping(ctx context.Context, client Client, tag string, record interface{}, options ...Option) {
-	var interval time.Duration = 5 * time.Minute
+	var interval = 5 * time.Minute
 	var replyCh chan error
 
 	for _, option := range options {

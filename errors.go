@@ -11,6 +11,7 @@ type causer interface {
 // Just need one instance
 var bufferFullErrInstance bufferFullErr
 
+// IsBufferFull returns true if the error is a BufferFull error
 func IsBufferFull(e error) bool {
 	for e != nil {
 		if berr, ok := e.(bufferFuller); ok {

@@ -125,7 +125,7 @@ func WithSubsecond(b bool) Option {
 	}
 }
 
-// WihContext specifies the context.Context object to be used by Post().
+// WithContext specifies the context.Context object to be used by Post().
 // Possible blocking operations are (1) writing to the background buffer,
 // and (2) waiting for a reply from when WithSyncAppend(true) is in use.
 func WithContext(ctx context.Context) Option {

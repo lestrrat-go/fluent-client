@@ -113,7 +113,7 @@ func (c *Buffered) Post(tag string, v interface{}, options ...Option) (err error
 
 	// This has to be separate from msg.replyCh, b/c msg would be
 	// put back to the pool
-	var replyCh chan error = msg.replyCh
+	var replyCh = msg.replyCh
 	if syncAppend {
 		if pdebug.Enabled {
 			pdebug.Printf("client: synchronous append requested. creating channel")
@@ -208,14 +208,16 @@ func (c *Buffered) Shutdown(ctx context.Context) error {
 	}
 }
 
-// Synchronously send a ping message
+// Ping synchronously sends a ping message. This ping bypasses the underlying
+// buffer of pending messages, and establishes a connection to the
+// server entirely for this ping message.
 func (c *Buffered) Ping(tag string, record interface{}, options ...Option) (err error) {
 	if pdebug.Enabled {
 		g := pdebug.Marker("Buffered.Ping").BindError(&err)
 		defer g.End()
 	}
 
-	var ctx context.Context = context.Background()
+	var ctx = context.Background()
 	var subsecond bool
 	var t time.Time
 	for _, opt := range options {

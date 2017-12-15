@@ -85,7 +85,7 @@ func newMinion(options ...Option) (*minion, error) {
 		writeTimeout:    3 * time.Second,
 	}
 
-	var writeQueueSize int = 64
+	var writeQueueSize = 64
 	var connectOnStart bool
 	for _, opt := range options {
 		switch opt.Name() {

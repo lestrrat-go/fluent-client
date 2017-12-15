@@ -18,7 +18,6 @@ func New(options ...Option) (Client, error) {
 
 	if buffered {
 		return NewBuffered(options...)
-	} else {
-		return NewUnbuffered(options...)
 	}
+	return NewUnbuffered(options...)
 }
