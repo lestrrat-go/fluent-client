@@ -109,7 +109,6 @@ func (s *server) Run(ctx context.Context) {
 		default:
 		}
 
-		once.Do(func() { close(s.ready) })
 		readerCh := make(chan *fluent.Message)
 		go func(ch chan *fluent.Message) {
 			if pdebug.Enabled {
@@ -122,6 +121,7 @@ func (s *server) Run(ctx context.Context) {
 					return
 				default:
 				}
+				once.Do(func() { close(s.ready) })
 				conn, err := s.listener.Accept()
 				if err != nil {
 					if pdebug.Enabled {
@@ -442,7 +442,7 @@ func TestBufferFull(t *testing.T) {
 		}
 	}
 
-	client.Shutdown(nil)
+	client.Close()
 }
 
 type badmsgpack struct{}
@@ -655,9 +655,13 @@ func TestPing(t *testing.T) {
 				if !assert.NoError(t, err, "fluent.New should succeed") {
 					return
 				}
-				if !assert.Error(t, client.Ping("ping", map[string]interface{}{"host": "localhost"}), "Ping should fail") {
+
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				if !assert.Error(t, client.Ping("ping", map[string]interface{}{"host": "localhost"}, fluent.WithContext(ctx)), "Ping should fail") {
 					return
 				}
+				client.Close()
 			})
 
 			t.Run("Ping with active server", func(t *testing.T) {
@@ -680,11 +684,17 @@ func TestPing(t *testing.T) {
 					fluent.WithAddress(s.Address),
 					fluent.WithBuffered(buffered),
 				)
-				if !assert.NoError(t, client.Ping("ping", map[string]interface{}{"host": "localhost"}), "Ping should succeed") {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				if !assert.NoError(t, client.Ping("ping", map[string]interface{}{"host": "localhost"}, fluent.WithContext(ctx)), "Ping should succeed") {
 					return
 				}
 
 				client.Shutdown(nil)
+
+				// timing sensitive :/ we need to give the server enough time to receive
+				// the message before canceling it via scancel
+				time.Sleep(100*time.Millisecond)
 				scancel()
 				<-s.Done()
 

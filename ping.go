@@ -26,6 +26,7 @@ func Ping(ctx context.Context, client Client, tag string, record interface{}, op
 	}
 
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
 	for {
 		select {

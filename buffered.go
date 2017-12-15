@@ -173,6 +173,10 @@ func (c *Buffered) Close() error {
 		close(c.minionQueue)
 		c.minionQueue = nil
 	}
+	if c.pingQueue != nil {
+		close(c.pingQueue)
+		c.pingQueue = nil
+	}
 	c.muClosed.Unlock()
 
 	c.minionCancel()
@@ -206,6 +210,14 @@ func (c *Buffered) Shutdown(ctx context.Context) error {
 
 // Synchronously send a ping message
 func (c *Buffered) Ping(tag string, record interface{}, options ...Option) error {
+	// Do not allow processing at all if we have closed
+	c.muClosed.RLock()
+	if c.closed {
+  c.muClosed.RUnlock()
+		return errors.New(`client has already been closed`)
+	}
+
+	var ctx context.Context = context.Background()
 	var subsecond bool
 	var t time.Time
 	for _, opt := range options {
@@ -214,6 +226,11 @@ func (c *Buffered) Ping(tag string, record interface{}, options ...Option) error
 			subsecond = opt.Value().(bool)
 		case optkeyTimestamp:
 			t = opt.Value().(time.Time)
+		case optkeyContext:
+			if pdebug.Enabled {
+				pdebug.Printf("client: using user-supplied context")
+			}
+			ctx = opt.Value().(context.Context)
 		}
 	}
 	if t.IsZero() {
@@ -222,6 +239,14 @@ func (c *Buffered) Ping(tag string, record interface{}, options ...Option) error
 
 	msg := makeMessage(tag, record, t, subsecond, true)
 	c.pingQueue <- msg
+  c.muClosed.RUnlock()
+
 	replyCh := msg.replyCh
-	return <-replyCh
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case e := <-replyCh:
+		return e
+	}
 }

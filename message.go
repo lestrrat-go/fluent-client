@@ -18,7 +18,7 @@ func makeMessage(tag string, record interface{}, t time.Time, useSubsecond, need
   msg.Record = record
   msg.subsecond = useSubsecond
 	if needReply {
-		msg.replyCh = make(chan error)
+		msg.replyCh = make(chan error, 1)
 	}
 	return msg
 }

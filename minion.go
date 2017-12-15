@@ -148,39 +148,53 @@ func (m *minion) runReader(ctx context.Context) {
 	}
 
 	defer close(m.readerDone)
+	// Wake up the writer goroutine so that it can detect
+	// cancelation.
+	defer m.cond.Broadcast()
 
 	// This goroutine receives the incoming data as fast as
 	// possible, so that the caller to enqueue does not block
 	for loop := true; loop; {
 		select {
 		case <-ctx.Done():
-			// Wake up the writer goroutine so that it can detect
-			// cancelation.
-			m.cond.Broadcast()
 			if pdebug.Enabled {
 				pdebug.Printf("background reader: cancel detected")
 			}
 			loop = false
-		case msg := <-m.incoming:
+		case msg, ok := <-m.incoming:
 			// m.incoming could have been closed already, so we should
 			// check if msg is legit
 			if msg != nil {
 				m.appendMessage(msg)
 			}
-		case msg := <-m.pingCh:
+			if !ok {
+				loop = false
+			}
+		case msg, ok := <-m.pingCh:
 			if msg != nil {
 				m.ping(msg)
+			}
+			if !ok {
+				loop = false
 			}
 		}
 	}
 
 	// if we have more messages in the channel, we should try to flush them
+	for len(m.pingCh) > 0 {
+		if pdebug.Enabled {
+			pdebug.Printf("background reader: flushing incoming pings (%d left)", len(m.pingCh))
+		}
+		m.ping(<-m.pingCh)
+	}
+
 	for len(m.incoming) > 0 {
 		if pdebug.Enabled {
 			pdebug.Printf("background reader: flushing incoming buffer (%d left)", len(m.incoming))
 		}
 		m.appendMessage(<-m.incoming)
 	}
+
 }
 
 // ping is a one-shot deal. we connect, we send, we bail out.
@@ -199,7 +213,7 @@ func (m *minion) ping(msg *Message) (err error) {
 
 	// Ping messages MUST have a return channel
 	if msg.replyCh == nil {
-		return
+		return nil
 	}
 
 	if pdebug.Enabled {
