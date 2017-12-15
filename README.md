@@ -141,6 +141,13 @@ The behavior will change as described above, but the interface is still the same
 | fluent.WithContext(context.Context) | Context to use                      | none              | Y | N |
 | fluent.WithSyncAppend(bool)         | Return failure if appending fails   | false             | Y | N |
 
+# OPTIONS (fluent.Ping)
+
+| Name | Short Description | Default Value |
+|:-----|:------------------|:--------------|
+| fluent.WithPingInterval(time.Duration) | Interval between pings    | 5 * time.Second |
+| fluent.WithPingResultChan(chan error)  | Where to send ping errors | none |
+
 # BENCHMARKS
 
 instructions: make sure you have the required fluentd clients, start fluentd at 127.0.0.1:24224, and run
