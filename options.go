@@ -125,7 +125,7 @@ func WithSubsecond(b bool) Option {
 	}
 }
 
-// WihContext specifies the context.Context object to be used by Post().
+// WithContext specifies the context.Context object to be used by Post().
 // Possible blocking operations are (1) writing to the background buffer,
 // and (2) waiting for a reply from when WithSyncAppend(true) is in use.
 func WithContext(ctx context.Context) Option {
@@ -183,5 +183,22 @@ func WithConnectOnStart(b bool) Option {
 	return &option{
 		name:  optkeyConnectOnStart,
 		value: b,
+	}
+}
+
+// WithPingInterval is used in the fluent.Ping method to specify the time
+// between pings. The default value is 5 minutes
+func WithPingInterval(t time.Duration) Option {
+	return &option{
+		name:  optkeyPingInterval,
+		value: t,
+	}
+}
+
+// WithPingResultChan specifies the channel where you will receive ping failures
+func WithPingResultChan(ch chan error) Option {
+	return &option{
+		name:  optkeyPingResultChan,
+		value: ch,
 	}
 }

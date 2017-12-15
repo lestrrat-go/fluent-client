@@ -66,8 +66,6 @@ func NewUnbuffered(options ...Option) (client *Unbuffered, err error) {
 		}
 	}
 
-pdebug.Printf("connectOnStart = %t", connectOnStart)
-
 	if connectOnStart {
 		if _, err := c.connect(true); err != nil {
 			return nil, errors.Wrap(err, `failed to connect on start`)
@@ -141,11 +139,8 @@ func (c *Unbuffered) Post(tag string, v interface{}, options ...Option) (err err
 	if t.IsZero() {
 		t = time.Now()
 	}
-	msg := getMessage()
-	msg.Tag = tag
-	msg.Time.Time = t
-	msg.Record = v
-	msg.subsecond = c.subsecond
+
+	msg := makeMessage(tag, v, t, c.subsecond, false)
 	defer releaseMessage(msg)
 
 	serialized, err := c.marshaler.Marshal(msg)
@@ -193,4 +188,15 @@ WRITE:
 
 	// All done!
 	return nil
+}
+
+// Ping sends a ping message. A ping for an unbuffered client is completely
+// analogous to sending a message with Post
+func (c *Unbuffered) Ping(tag string, v interface{}, options ...Option) (err error) {
+	if pdebug.Enabled {
+		g := pdebug.Marker("fluent.Unbuffered.Ping").BindError(&err)
+		defer g.End()
+	}
+
+	return c.Post(tag, v, options...)
 }

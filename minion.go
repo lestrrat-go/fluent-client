@@ -62,6 +62,7 @@ type minion struct {
 	muPending       sync.RWMutex
 	network         string
 	pending         []byte
+	pingCh          chan *Message
 	readerDone      chan struct{}
 	tagPrefix       string
 	writeThreshold  int
@@ -78,12 +79,13 @@ func newMinion(options ...Option) (*minion, error) {
 		maxConnAttempts: 64,
 		marshaler:       marshalFunc(msgpackMarshal),
 		network:         "tcp",
+		pingCh:          make(chan *Message),
 		readerDone:      make(chan struct{}),
 		writeThreshold:  8 * 1028,
 		writeTimeout:    3 * time.Second,
 	}
 
-	var writeQueueSize int = 64
+	var writeQueueSize = 64
 	var connectOnStart bool
 	for _, opt := range options {
 		switch opt.Name() {
@@ -116,8 +118,6 @@ func newMinion(options ...Option) (*minion, error) {
 		}
 	}
 
-pdebug.Printf("connectOnStart = %t", connectOnStart)
-
 	// if requested, connect to the server
 	if connectOnStart {
 		conn, err := dial(context.Background(), m.network, m.address, m.dialTimeout)
@@ -148,44 +148,121 @@ func (m *minion) runReader(ctx context.Context) {
 	}
 
 	defer close(m.readerDone)
+	// Wake up the writer goroutine so that it can detect
+	// cancelation.
+	defer m.cond.Broadcast()
 
 	// This goroutine receives the incoming data as fast as
 	// possible, so that the caller to enqueue does not block
 	for loop := true; loop; {
 		select {
 		case <-ctx.Done():
-			// Wake up the writer goroutine so that it can detect
-			// cancelation.
-			m.cond.Broadcast()
 			if pdebug.Enabled {
 				pdebug.Printf("background reader: cancel detected")
 			}
 			loop = false
-		case msg := <-m.incoming:
+		case msg, ok := <-m.incoming:
 			// m.incoming could have been closed already, so we should
 			// check if msg is legit
 			if msg != nil {
 				m.appendMessage(msg)
 			}
+			if !ok {
+				loop = false
+			}
+		case msg, ok := <-m.pingCh:
+			if msg != nil {
+				m.ping(msg)
+			}
+			if !ok {
+				loop = false
+			}
 		}
 	}
 
 	// if we have more messages in the channel, we should try to flush them
+	for len(m.pingCh) > 0 {
+		if pdebug.Enabled {
+			pdebug.Printf("background reader: flushing incoming pings (%d left)", len(m.pingCh))
+		}
+		m.ping(<-m.pingCh)
+	}
+
 	for len(m.incoming) > 0 {
 		if pdebug.Enabled {
 			pdebug.Printf("background reader: flushing incoming buffer (%d left)", len(m.incoming))
 		}
 		m.appendMessage(<-m.incoming)
 	}
+
+}
+
+// ping is a one-shot deal. we connect, we send, we bail out.
+// if anything fails, oh well...
+func (m *minion) ping(msg *Message) (err error) {
+	if pdebug.Enabled {
+		g := pdebug.Marker("minion.ping").BindError(&err)
+		defer g.End()
+	}
+	defer releaseMessage(msg)
+	defer func() {
+		if err == nil {
+			return
+		}
+
+		if pdebug.Enabled {
+			pdebug.Printf("Replying back with an error message (%s)", err)
+		}
+		msg.replyCh <- err
+	}()
+
+	// Ping messages MUST have a return channel
+	if msg.replyCh == nil {
+		return nil
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("Connecting to server for ping...")
+	}
+	conn, err := dial(context.Background(), m.network, m.address, m.dialTimeout)
+	if err != nil {
+		return errors.Wrap(err, `failed to connect server for ping`)
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("Serializing ping message...")
+	}
+	buf, err := m.serialize(msg)
+	if err != nil {
+		return errors.Wrap(err, `failed to serialize ping message`)
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("Writing ping message...")
+	}
+	for len(buf) > 0 {
+		n, err := conn.Write(buf)
+		if err != nil {
+			return errors.Wrap(err, `failed to write ping message to connection`)
+		}
+		buf = buf[n:]
+	}
+
+	// releaseMessage automatically closes msg.replyCh
+	return nil
+}
+
+func (m *minion) serialize(msg *Message) ([]byte, error) {
+	if p := m.tagPrefix; len(p) > 0 {
+		msg.Tag = p + "." + msg.Tag
+	}
+
+	return m.marshaler.Marshal(msg)
 }
 
 // appends a message to the pending buffer
 func (m *minion) appendMessage(msg *Message) {
 	defer releaseMessage(msg)
-
-	if p := m.tagPrefix; len(p) > 0 {
-		msg.Tag = p + "." + msg.Tag
-	}
 
 	if pdebug.Enabled {
 		if msg.replyCh != nil {
@@ -193,7 +270,7 @@ func (m *minion) appendMessage(msg *Message) {
 		}
 	}
 
-	buf, err := m.marshaler.Marshal(msg)
+	buf, err := m.serialize(msg)
 	if err != nil {
 		if pdebug.Enabled {
 			pdebug.Printf("background reader: failed to marshal message: %s", err)

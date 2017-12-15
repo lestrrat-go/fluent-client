@@ -54,6 +54,20 @@ func Example() {
     return
   }
 }
+
+func ExamplePing() {
+  client, err := fluent.New()
+  if err != nil {
+    log.Printf("failed to create client: %s", err)
+    return
+  }
+
+  ctx, cancel := context.WithCancel(context.Background())
+  defer cancel()
+
+  go fluent.Ping(ctx, client, "ping", "hostname")
+}
+
 ```
 
 # DESCRIPTION
@@ -126,6 +140,13 @@ The behavior will change as described above, but the interface is still the same
 | fluent.WithTimestamp(time.Time)     | Timestamp to use for message        | current time      | Y | Y |
 | fluent.WithContext(context.Context) | Context to use                      | none              | Y | N |
 | fluent.WithSyncAppend(bool)         | Return failure if appending fails   | false             | Y | N |
+
+# OPTIONS (fluent.Ping)
+
+| Name | Short Description | Default Value |
+|:-----|:------------------|:--------------|
+| fluent.WithPingInterval(time.Duration) | Interval between pings    | 5 * time.Second |
+| fluent.WithPingResultChan(chan error)  | Where to send ping errors | none |
 
 # BENCHMARKS
 

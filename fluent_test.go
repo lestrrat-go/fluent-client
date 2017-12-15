@@ -109,7 +109,6 @@ func (s *server) Run(ctx context.Context) {
 		default:
 		}
 
-		once.Do(func() { close(s.ready) })
 		readerCh := make(chan *fluent.Message)
 		go func(ch chan *fluent.Message) {
 			if pdebug.Enabled {
@@ -122,6 +121,7 @@ func (s *server) Run(ctx context.Context) {
 					return
 				default:
 				}
+				once.Do(func() { close(s.ready) })
 				conn, err := s.listener.Accept()
 				if err != nil {
 					if pdebug.Enabled {
@@ -442,7 +442,7 @@ func TestBufferFull(t *testing.T) {
 		}
 	}
 
-	client.Shutdown(nil)
+	client.Close()
 }
 
 type badmsgpack struct{}
@@ -626,6 +626,82 @@ func TestPostRoundtrip(t *testing.T) {
 
 				})
 			}
+		})
+	}
+}
+
+func TestPing(t *testing.T) {
+	for _, buffered := range []bool{true, false} {
+		t.Run(fmt.Sprintf("buffered=%t", buffered), func(t *testing.T) {
+			t.Run("Ping with no server", func(t *testing.T) {
+				// find a port that is not available (this may be timing dependent)
+				var dialer net.Dialer
+				var port int = 22412
+				for i := 0; i < 1000; i++ {
+					ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+					conn, err := dialer.DialContext(ctx, `net`, fmt.Sprintf(`127.0.0.1:%d`, port))
+					cancel()
+					if err == nil {
+						port++
+						conn.Close()
+						continue
+					}
+					break
+				}
+				client, err := fluent.New(
+					fluent.WithAddress(fmt.Sprintf(`127.0.0.1:%d`, port)),
+					fluent.WithBuffered(buffered),
+				)
+				if !assert.NoError(t, err, "fluent.New should succeed") {
+					return
+				}
+
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				if !assert.Error(t, client.Ping("ping", map[string]interface{}{"host": "localhost"}, fluent.WithContext(ctx)), "Ping should fail") {
+					return
+				}
+				client.Close()
+			})
+
+			t.Run("Ping with active server", func(t *testing.T) {
+				s, err := newServer(false)
+				if !assert.NoError(t, err, "newServer should succeed") {
+					return
+				}
+				defer s.Close()
+
+				// This is just to stop the server
+				sctx, scancel := context.WithCancel(context.Background())
+				defer scancel()
+
+				go s.Run(sctx)
+
+				<-s.Ready()
+
+				client, err := fluent.New(
+					fluent.WithNetwork(s.Network),
+					fluent.WithAddress(s.Address),
+					fluent.WithBuffered(buffered),
+				)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				if !assert.NoError(t, client.Ping("ping", map[string]interface{}{"host": "localhost"}, fluent.WithContext(ctx)), "Ping should succeed") {
+					return
+				}
+
+				client.Shutdown(nil)
+
+				// timing sensitive :/ we need to give the server enough time to receive
+				// the message before canceling it via scancel
+				time.Sleep(100*time.Millisecond)
+				scancel()
+				<-s.Done()
+
+				if !assert.Len(t, s.Payload, 1, "expected 1 message") {
+					return
+				}
+			})
 		})
 	}
 }

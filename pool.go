@@ -15,13 +15,6 @@ func getMessage() *Message {
 }
 
 func releaseMessage(m *Message) {
-	m.Tag = ""
-	m.Time = EventTime{}
-	m.Record = nil
-	m.Option = nil
-	if m.replyCh != nil {
-		close(m.replyCh)
-		m.replyCh = nil
-	}
+	m.clear()
 	msgpool.Put(m)
 }

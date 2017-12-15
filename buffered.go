@@ -46,6 +46,7 @@ func NewBuffered(options ...Option) (client *Buffered, err error) {
 	c.minionDone = m.done
 	c.minionQueue = m.incoming
 	c.minionCancel = cancel
+	c.pingQueue = m.pingCh
 	c.subsecond = subsecond
 
 	go m.runReader(ctx)
@@ -108,21 +109,15 @@ func (c *Buffered) Post(tag string, v interface{}, options ...Option) (err error
 		t = time.Now()
 	}
 
-	msg := getMessage()
-	msg.Tag = tag
-	msg.Time.Time = t
-	msg.Record = v
-	msg.subsecond = subsecond
+	msg := makeMessage(tag, v, t, subsecond, syncAppend)
 
 	// This has to be separate from msg.replyCh, b/c msg would be
 	// put back to the pool
-	var replyCh chan error
+	var replyCh = msg.replyCh
 	if syncAppend {
 		if pdebug.Enabled {
 			pdebug.Printf("client: synchronous append requested. creating channel")
 		}
-		replyCh = make(chan error)
-		msg.replyCh = replyCh
 	}
 
 	// Because case statements in a select is evaluated in random
@@ -178,6 +173,10 @@ func (c *Buffered) Close() error {
 		close(c.minionQueue)
 		c.minionQueue = nil
 	}
+	if c.pingQueue != nil {
+		close(c.pingQueue)
+		c.pingQueue = nil
+	}
 	c.muClosed.Unlock()
 
 	c.minionCancel()
@@ -206,5 +205,63 @@ func (c *Buffered) Shutdown(ctx context.Context) error {
 		return ctx.Err()
 	case <-c.minionDone:
 		return nil
+	}
+}
+
+// Ping synchronously sends a ping message. This ping bypasses the underlying
+// buffer of pending messages, and establishes a connection to the
+// server entirely for this ping message.
+func (c *Buffered) Ping(tag string, record interface{}, options ...Option) (err error) {
+	if pdebug.Enabled {
+		g := pdebug.Marker("Buffered.Ping").BindError(&err)
+		defer g.End()
+	}
+
+	var ctx = context.Background()
+	var subsecond bool
+	var t time.Time
+	for _, opt := range options {
+		switch opt.Name() {
+		case optkeySubSecond:
+			subsecond = opt.Value().(bool)
+		case optkeyTimestamp:
+			t = opt.Value().(time.Time)
+		case optkeyContext:
+			if pdebug.Enabled {
+				pdebug.Printf("client: using user-supplied context")
+			}
+			ctx = opt.Value().(context.Context)
+		}
+	}
+	if t.IsZero() {
+		t = time.Now()
+	}
+
+	msg := makeMessage(tag, record, t, subsecond, true)
+
+	// Do not allow processing at all if we have closed
+	c.muClosed.RLock()
+	if c.closed {
+		c.muClosed.RUnlock()
+		return errors.New(`client has already been closed`)
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("Sending to ping queue")
+	}
+	replyCh := msg.replyCh
+
+	c.pingQueue <- msg
+	c.muClosed.RUnlock()
+
+	if pdebug.Enabled {
+		pdebug.Printf("Waiting for synchronous ping response...")
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case e := <-replyCh:
+		return e
 	}
 }
