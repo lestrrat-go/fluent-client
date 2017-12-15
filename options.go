@@ -95,7 +95,7 @@ func WithSyncAppend(b bool) Option {
 // the underlying pending buffer. If a `Client.Post` operation
 // would exceed this size, an error is returned (note: you must
 // use `WithSyncAppend` in `Client.Post` if you want this error
-// to be reported)
+// to be reported). The defalut value is 8MB
 func WithBufferLimit(v interface{}) Option {
 	return &option{
 		name:  optkeyBufferLimit,
@@ -173,5 +173,15 @@ func WithWriteQueueSize(n int) Option {
 	return &option{
 		name:  optkeyWriteQueueSize,
 		value: n,
+	}
+}
+
+// WithConnectOnStart is specified when you would like a buffered client
+// to make sure that it can connect to the specified fluentd server on
+// startup.
+func WithConnectOnStart(b bool) Option {
+	return &option{
+		name:  optkeyConnectOnStart,
+		value: b,
 	}
 }

@@ -215,6 +215,65 @@ func (s *server) Run(ctx context.Context) {
 	}
 }
 
+func TestConnectOnStart(t *testing.T) {
+	for _, buffered := range []bool{true, false} {
+		t.Run(fmt.Sprintf("failure case, buffered=%t", buffered), func(t *testing.T) {
+			// find a port that is not available (this may be timing dependent)
+			var dialer net.Dialer
+			var port int = 22412
+			for i := 0; i < 1000; i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				conn, err := dialer.DialContext(ctx, `net`, fmt.Sprintf(`127.0.0.1:%d`, port))
+				cancel()
+				if err == nil {
+					port++
+					conn.Close()
+					continue
+				}
+				break
+			}
+			client, err := fluent.New(
+				fluent.WithAddress(fmt.Sprintf(`127.0.0.1:%d`, port)),
+				fluent.WithConnectOnStart(true),
+				fluent.WithBuffered(buffered),
+			)
+			if !assert.Error(t, err, `fluent.New should fail`) {
+				client.Close()
+				return
+			}
+		})
+	}
+
+	s, err := newServer(false)
+	if !assert.NoError(t, err, "newServer should succeed") {
+		return
+	}
+	defer s.Close()
+
+	// This is just to stop the server
+	sctx, scancel := context.WithCancel(context.Background())
+	defer scancel()
+
+	go s.Run(sctx)
+
+	<-s.Ready()
+
+	for _, buffered := range []bool{true, false} {
+		t.Run(fmt.Sprintf("normal case, buffered=%t", buffered), func(t *testing.T) {
+			client, err := fluent.New(
+				fluent.WithNetwork(s.Network),
+				fluent.WithAddress(s.Address),
+				fluent.WithConnectOnStart(true),
+				fluent.WithBuffered(buffered),
+			)
+			if !assert.NoError(t, err, "fluent.New should succeed") {
+				return
+			}
+			client.Close()
+		})
+	}
+}
+
 func TestCloseAndPost(t *testing.T) {
 	client, err := fluent.New()
 	if !assert.NoError(t, err, `fluent.New should succeed`) {
@@ -265,7 +324,6 @@ func TestTagPrefix(t *testing.T) {
 		fluent.WithNetwork(s.Network),
 		fluent.WithAddress(s.Address),
 		fluent.WithTagPrefix("test"),
-		fluent.WithContext(sctx),
 	)
 	if !assert.NoError(t, client.Post("tag_name", map[string]interface{}{"foo": 1}), "Post should succeed") {
 		return

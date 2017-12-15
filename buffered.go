@@ -23,9 +23,9 @@ import (
 //   * fluent.WithWriteQueueSize
 //
 // Please see their respective documentation for details.
-func NewBuffered(options ...Option) (*Buffered, error) {
+func NewBuffered(options ...Option) (client *Buffered, err error) {
 	if pdebug.Enabled {
-		g := pdebug.Marker("fluent.NewBuffered")
+		g := pdebug.Marker("fluent.NewBuffered").BindError(&err)
 		defer g.End()
 	}
 	m, err := newMinion(options...)
