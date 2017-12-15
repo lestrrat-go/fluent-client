@@ -247,10 +247,10 @@ func (c *Buffered) Ping(tag string, record interface{}, options ...Option) (err 
 	if pdebug.Enabled {
 		pdebug.Printf("Sending to ping queue")
 	}
+	replyCh := msg.replyCh
+
 	c.pingQueue <- msg
 	c.muClosed.RUnlock()
-
-	replyCh := msg.replyCh
 
 	if pdebug.Enabled {
 		pdebug.Printf("Waiting for synchronous ping response...")
