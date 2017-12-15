@@ -17,6 +17,8 @@ const (
 	optkeyMarshaler       = "marshaler"
 	optkeyMaxConnAttempts = "max_conn_attempts"
 	optkeyNetwork         = "network"
+	optkeyPingInterval    = "ping_interval"
+	optkeyPingResultChan  = "ping_result_chan"
 	optkeySubSecond       = "subsecond"
 	optkeySyncAppend      = "sync_append"
 	optkeyTagPrefix       = "tag_prefix"
@@ -47,6 +49,7 @@ type Unbuffered struct {
 // write to the server as soon as possible
 type Client interface {
 	Post(string, interface{}, ...Option) error
+	Ping(string, interface{}, ...Option) error
 	Close() error
 	Shutdown(context.Context) error
 }
@@ -57,6 +60,7 @@ type Buffered struct {
 	minionDone   chan struct{}
 	minionQueue  chan *Message
 	muClosed     sync.RWMutex
+	pingQueue    chan *Message
 	subsecond    bool
 }
 

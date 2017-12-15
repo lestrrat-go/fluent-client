@@ -185,3 +185,20 @@ func WithConnectOnStart(b bool) Option {
 		value: b,
 	}
 }
+
+// WithPingInterval is used in the fluent.Ping method to specify the time
+// between pings. The default value is 5 minutes
+func WithPingInterval(t time.Duration) Option {
+	return &option{
+		name:  optkeyPingInterval,
+		value: t,
+	}
+}
+
+// WithPingResultChan specifies the channel where you will receive ping failures
+func WithPingResultChan(ch chan error) Option {
+	return &option{
+		name:  optkeyPingResultChan,
+		value: ch,
+	}
+}

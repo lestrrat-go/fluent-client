@@ -47,3 +47,16 @@ func Example() {
 
 	// OUTPUT:
 }
+
+func ExamplePing() {
+	client, err := fluent.New()
+	if err != nil {
+		log.Printf("failed to create client: %s", err)
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go fluent.Ping(ctx, client, "ping", "hostname")
+}

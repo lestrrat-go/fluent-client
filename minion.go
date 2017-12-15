@@ -62,6 +62,7 @@ type minion struct {
 	muPending       sync.RWMutex
 	network         string
 	pending         []byte
+	pingCh          chan *Message
 	readerDone      chan struct{}
 	tagPrefix       string
 	writeThreshold  int
@@ -78,6 +79,7 @@ func newMinion(options ...Option) (*minion, error) {
 		maxConnAttempts: 64,
 		marshaler:       marshalFunc(msgpackMarshal),
 		network:         "tcp",
+		pingCh:          make(chan *Message),
 		readerDone:      make(chan struct{}),
 		writeThreshold:  8 * 1028,
 		writeTimeout:    3 * time.Second,
@@ -115,8 +117,6 @@ func newMinion(options ...Option) (*minion, error) {
 			connectOnStart = opt.Value().(bool)
 		}
 	}
-
-pdebug.Printf("connectOnStart = %t", connectOnStart)
 
 	// if requested, connect to the server
 	if connectOnStart {
@@ -167,6 +167,10 @@ func (m *minion) runReader(ctx context.Context) {
 			if msg != nil {
 				m.appendMessage(msg)
 			}
+		case msg := <-m.pingCh:
+			if msg != nil {
+				m.ping(msg)
+			}
 		}
 	}
 
@@ -179,13 +183,67 @@ func (m *minion) runReader(ctx context.Context) {
 	}
 }
 
-// appends a message to the pending buffer
-func (m *minion) appendMessage(msg *Message) {
+// ping is a one-shot deal. we connect, we send, we bail out.
+// if anything fails, oh well...
+func (m *minion) ping(msg *Message) (err error) {
+	if pdebug.Enabled {
+		g := pdebug.Marker("minion.ping").BindError(&err)
+		defer g.End()
+	}
 	defer releaseMessage(msg)
+	defer func() {
+		if err != nil {
+			msg.replyCh <- err
+		}
+	}()
 
+	// Ping messages MUST have a return channel
+	if msg.replyCh == nil {
+		return
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("Connecting to server for ping...")
+	}
+	conn, err := dial(context.Background(), m.network, m.address, m.dialTimeout)
+	if err != nil {
+		return errors.Wrap(err, `failed to connect server for ping`)
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("Serializing ping message...")
+	}
+	buf, err := m.serialize(msg)
+	if err != nil {
+		return errors.Wrap(err, `failed to serialize ping message`)
+	}
+
+	if pdebug.Enabled {
+		pdebug.Printf("Writing ping message...")
+	}
+	for len(buf) > 0 {
+		n, err := conn.Write(buf)
+		if err != nil {
+			return errors.Wrap(err, `failed to write ping message to connection`)
+		}
+		buf = buf[n:]
+	}
+
+	// releaseMessage automatically closes msg.replyCh
+	return nil
+}
+
+func (m *minion) serialize(msg *Message) ([]byte, error) {
 	if p := m.tagPrefix; len(p) > 0 {
 		msg.Tag = p + "." + msg.Tag
 	}
+
+	return m.marshaler.Marshal(msg)
+}
+
+// appends a message to the pending buffer
+func (m *minion) appendMessage(msg *Message) {
+	defer releaseMessage(msg)
 
 	if pdebug.Enabled {
 		if msg.replyCh != nil {
@@ -193,7 +251,7 @@ func (m *minion) appendMessage(msg *Message) {
 		}
 	}
 
-	buf, err := m.marshaler.Marshal(msg)
+	buf, err := m.serialize(msg)
 	if err != nil {
 		if pdebug.Enabled {
 			pdebug.Printf("background reader: failed to marshal message: %s", err)

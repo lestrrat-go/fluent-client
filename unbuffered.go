@@ -66,7 +66,7 @@ func NewUnbuffered(options ...Option) (client *Unbuffered, err error) {
 		}
 	}
 
-pdebug.Printf("connectOnStart = %t", connectOnStart)
+	pdebug.Printf("connectOnStart = %t", connectOnStart)
 
 	if connectOnStart {
 		if _, err := c.connect(true); err != nil {
@@ -141,13 +141,14 @@ func (c *Unbuffered) Post(tag string, v interface{}, options ...Option) (err err
 	if t.IsZero() {
 		t = time.Now()
 	}
-	msg := getMessage()
-	msg.Tag = tag
-	msg.Time.Time = t
-	msg.Record = v
-	msg.subsecond = c.subsecond
+
+	msg := makeMessage(tag, v, t, c.subsecond, false)
 	defer releaseMessage(msg)
 
+	return c.send(msg)
+}
+
+func (c *Unbuffered) send(msg *Message) error {
 	serialized, err := c.marshaler.Marshal(msg)
 	if err != nil {
 		return errors.Wrap(err, `failed to serialize payload`)
@@ -193,4 +194,28 @@ WRITE:
 
 	// All done!
 	return nil
+}
+
+func (c *Unbuffered) Ping(tag string, v interface{}, options ...Option) (err error) {
+	if pdebug.Enabled {
+		g := pdebug.Marker("fluent.Unbuffered.Ping").BindError(&err)
+		defer g.End()
+	}
+
+	var t time.Time
+	for _, opt := range options {
+		switch opt.Name() {
+		case optkeyTimestamp:
+			t = opt.Value().(time.Time)
+		}
+	}
+
+	if t.IsZero() {
+		t = time.Now()
+	}
+
+	msg := makeMessage(tag, v, t, c.subsecond, true)
+	defer releaseMessage(msg)
+
+	return c.send(msg)
 }
