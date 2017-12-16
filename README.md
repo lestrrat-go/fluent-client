@@ -186,8 +186,9 @@ ok  	github.com/lestrrat/go-fluent-client	8.952s
 * Has buffered/unbuffered clients
 
 While `github.com/k0kubun/fluent-logger-go` is fastest, it does not check errors and does not handle some
-synchronization edge cases. This library goes on its way to check these things, and still manages to
-come almost as fast as `github.com/k0kubun/fluent-logger-go`, whihch is several times faster as the official library.
+synchronization edge cases. `github.com/lestrrat/go-fluent-client` goes into great pains to check these
+things, and still manages to come almost as fast as `github.com/k0kubun/fluent-logger-go`, whihch is already
+several times faster than the official library.
 
 The buffered client is the default, but you may use the unbuffered client, which does not keep
 the payload in an internal buffer before sending to the server. This is slightly more inefficient,
