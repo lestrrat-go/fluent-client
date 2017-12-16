@@ -136,18 +136,20 @@ func WithContext(ctx context.Context) Option {
 }
 
 // WithMaxConnAttempts specifies the maximum number of attempts made by
-// the client to connect to the fluentd server during final data flushing.
+// the client to connect to the fluentd server during final data flushing
+// for buffered clients. For unbuffered clients, this controls the number
+// of attempts made when calling `Post`.
 //
-// During normal operations, the client will indefinitely attempt to connect
-// to the server (whilst being backed-off properly), as it should try as hard
-// as possible to send the stored data.
+// For buffered clients: During normal operation, the client will indefinitely
+// attempt to connect to the server (whilst being backed-off properly), as
+// it should try as hard as possible to send the stored data.
 //
 // This option controls the behavior when the client still has more data to
 // send AFTER it has been told to Close() or Shutdown(). In this case we know
 // the client wants to stop at some point, so we try to connect up to a
 // finite number of attempts.
 //
-// The default value is 64.
+// The default value is 64 for both buffered and unbuffered clients.
 func WithMaxConnAttempts(n uint64) Option {
 	return &option{
 		name:  optkeyMaxConnAttempts,
