@@ -130,7 +130,7 @@ The behavior will change as described above, but the interface is still the same
 | fluent.WithSubsecond(bool)            | Use EventTime                       | false             | Y | Y |
 | fluent.WithBufferLimit(int)           | Max buffer size to store            | 8 * 1024 * 1024   | Y | N |
 | fluent.WithWriteThreshold(int)        | Min buffer size before writes start | 8 * 1024          | Y | N |
-| fluent.WithMaxConnAttempts(int)       | Max attempts to make during close   | 64                | Y | N |
+| fluent.WithMaxConnAttempts(int)       | Max attempts to make during close (buffered), or max attempts to make when connecting to the server (unbuffered)  | 64 | Y | Y |
 | fluent.WithWriteQueueSize(int)        | Channel size for background reader  | 64                | Y | N |
 
 # OPTIONS ((fluent.Client).Post)
