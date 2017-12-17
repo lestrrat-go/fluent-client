@@ -157,12 +157,14 @@ go test -run=none -bench=. -benchmem -tags bench
 ```
 
 ```
-BenchmarkK0kubun-4              	 1000000	      2723 ns/op	     968 B/op	      11 allocs/op
-BenchmarkLestrrat-4             	  500000	      3661 ns/op	     530 B/op	       7 allocs/op
-BenchmarkLestrratUnbuffered-4   	  200000	      9438 ns/op	     512 B/op	       7 allocs/op
-BenchmarkOfficial-4             	  200000	     10990 ns/op	     896 B/op	       9 allocs/op
+BenchmarkK0kubun-4              	  500000	      3220 ns/op	     968 B/op	      12 allocs/op
+BenchmarkLestrrat-4             	  500000	      4122 ns/op	     530 B/op	       7 allocs/op
+BenchmarkLestrratJSON-4         	  300000	      6639 ns/op	     741 B/op	      11 allocs/op
+BenchmarkLestrratUnbuffered-4   	  100000	     11719 ns/op	     512 B/op	       7 allocs/op
+BenchmarkOfficial-4             	  100000	     10443 ns/op	     896 B/op	       9 allocs/op
+BenchmarkOfficialJSON-4         	  100000	     17796 ns/op	    1760 B/op	      25 allocs/op
 PASS
-ok  	github.com/lestrrat/go-fluent-client	8.952s
+ok  	github.com/lestrrat/go-fluent-client	10.287s
 ```
 
 ## Versions
@@ -170,9 +172,9 @@ ok  	github.com/lestrrat/go-fluent-client	8.952s
 | Name | Version |
 |---------|---------|
 | fluentd (td-agent) | 0.12.19 |
-| github.com/lestrrat/go-fluent-client | 57ffea62d908367039b3fdf45c21fa30e29e352e |
+| github.com/lestrrat/go-fluent-client | f3fb05a2b7eb40bb426dd8e1ba43e9ff47b412ec |
 | github.com/k0kubun/fluent-logger-go | e1cfc57bb12c99d7207d43b942527c9450d14382 |
-| github.com/fluent/fluent-logger-golang | a8dfe4adfeaf7b985acb486f6b060ff2f6a17e91 |
+| github.com/fluent/fluent-logger-golang | 8bbc2356beaf021b04c9bd5cdc76ea5a7ccb40ec |
 
 ## Analysis 
 
