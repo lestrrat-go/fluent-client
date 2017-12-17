@@ -12,11 +12,11 @@ import (
 )
 
 func makeMessage(tag string, record interface{}, t time.Time, useSubsecond, needReply bool) *Message {
-  msg := getMessage()
-  msg.Tag = tag
-  msg.Time.Time = t
-  msg.Record = record
-  msg.subsecond = useSubsecond
+	msg := getMessage()
+	msg.Tag = tag
+	msg.Time.Time = t
+	msg.Record = record
+	msg.subsecond = useSubsecond
 	if needReply {
 		msg.replyCh = make(chan error, 1)
 	}
@@ -84,26 +84,34 @@ func (m *Message) UnmarshalJSON(buf []byte) error {
 func (m *Message) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 
+	// XXX Encoder appends a silly newline at the end, so we truncate
+	// 1 byte for each call
+	enc := json.NewEncoder(&buf)
+
 	buf.WriteByte('[')
-	buf.WriteString(strconv.Quote(m.Tag))
-	buf.WriteByte(',')
-	buf.WriteString(strconv.FormatInt(m.Time.Unix(), 10))
+
+	enc.Encode(m.Tag)
+	buf.Truncate(buf.Len() - 1)
+
 	buf.WriteByte(',')
 
-	// XXX Encoder appends a silly newline at the end, so use
-	// json.Marshal instead
-	data, err := json.Marshal(m.Record)
-	if err != nil {
+	enc.Encode(m.Time.Unix())
+	buf.Truncate(buf.Len() - 1)
+
+	buf.WriteByte(',')
+
+	if err := enc.Encode(m.Record); err != nil {
 		return nil, errors.Wrap(err, `failed to encode record`)
 	}
-	buf.Write(data)
+	buf.Truncate(buf.Len() - 1)
+
 	buf.WriteByte(',')
 
-	data, err = json.Marshal(m.Option)
-	if err != nil {
+	if err := enc.Encode(m.Option); err != nil {
 		return nil, errors.Wrap(err, `failed to encode option`)
 	}
-	buf.Write(data)
+	buf.Truncate(buf.Len() - 1)
+
 	buf.WriteByte(']')
 
 	if pdebug.Enabled {

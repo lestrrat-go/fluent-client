@@ -34,6 +34,18 @@ func BenchmarkLestrrat(b *testing.B) {
 	c.Shutdown(nil)
 }
 
+func BenchmarkLestrratJSON(b *testing.B) {
+	c, _ := lestrrat.New(lestrrat.WithJSONMarshaler())
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < postsPerIter; j++ {
+			if c.Post(tag, map[string]interface{}{"count": j}) != nil {
+				b.Logf("whoa Post failed")
+			}
+		}
+	}
+	c.Shutdown(nil)
+}
+
 func BenchmarkLestrratUnbuffered(b *testing.B) {
 	c, _ := lestrrat.New(lestrrat.WithBuffered(false))
 	for i := 0; i < b.N; i++ {
