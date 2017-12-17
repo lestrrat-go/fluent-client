@@ -65,7 +65,25 @@ func ExamplePing() {
   ctx, cancel := context.WithCancel(context.Background())
   defer cancel()
 
-  go fluent.Ping(ctx, client, "ping", "hostname")
+  // Goroutine to wait for errors
+  errorCh := make(chan error, 1)
+  go func() {
+    // This is just an example to stop pinging on errors
+    for {
+      select {
+      case <-ctx.Done():
+        return
+      case e := <-errorCh:
+        log.Printf("got an error during ping: %s", e.Error())
+        cancel()
+        return
+      }
+    }
+  }()
+
+  go fluent.Ping(ctx, client, "ping", "hostname", fluent.WithPingResultChan(errorCh))
+
+  // Do what you need with your main program...
 }
 
 ```

@@ -9,7 +9,7 @@ import (
 )
 
 func Example() {
-  // Connects to fluentd at 127.0.0.1:24224. If you want to connect to
+	// Connects to fluentd at 127.0.0.1:24224. If you want to connect to
 	// a different host, use the following:
 	//
 	//   client, err := fluent.New(fluent.WithAddress("fluent.example.com"))
@@ -58,5 +58,23 @@ func ExamplePing() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go fluent.Ping(ctx, client, "ping", "hostname")
+	// Goroutine to wait for errors
+	errorCh := make(chan error, 1)
+	go func() {
+		// This is just an example to stop pinging on errors
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e := <-errorCh:
+				log.Printf("got an error during ping: %s", e.Error())
+				cancel()
+				return
+			}
+		}
+	}()
+
+	go fluent.Ping(ctx, client, "ping", "hostname", fluent.WithPingResultChan(errorCh))
+
+	// Do what you need with your main program...
 }
