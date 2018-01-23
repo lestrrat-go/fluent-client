@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	backoff "github.com/lestrrat/go-backoff"
 	pdebug "github.com/lestrrat/go-pdebug"
 	"github.com/pkg/errors"
 )
@@ -51,6 +51,7 @@ import (
 
 type minion struct {
 	address         string
+	backoffPolicy   backoff.Policy
 	buffer          []byte
 	bufferLimit     int
 	cond            *sync.Cond
@@ -72,6 +73,7 @@ type minion struct {
 func newMinion(options ...Option) (*minion, error) {
 	m := &minion{
 		address:         "127.0.0.1:24224",
+		backoffPolicy:   backoff.NewExponential(),
 		bufferLimit:     8 * 1024 * 1024,
 		cond:            sync.NewCond(&sync.Mutex{}),
 		dialTimeout:     3 * time.Second,
@@ -344,8 +346,6 @@ func (m *minion) runWriter(ctx context.Context) {
 		}
 	}(conn)
 
-	expbackoff := backoff.NewExponentialBackOff()
-
 	for {
 		// Wait for the reader to notify us
 		if err := m.waitPending(ctx); err != nil {
@@ -377,15 +377,7 @@ func (m *minion) runWriter(ctx context.Context) {
 				parentCtx = context.Background()
 			}
 
-			retryCtx, cancel := context.WithTimeout(parentCtx, m.dialTimeout)
-			b := backoff.WithContext(expbackoff, retryCtx)
-			backoff.Retry(func() error {
-				var dialerr error
-				conn, dialerr = dial(parentCtx, m.network, m.address, m.dialTimeout)
-				return dialerr
-			}, b)
-			cancel()
-
+			conn = m.connect(parentCtx)
 			if pdebug.Enabled {
 				if conn == nil {
 					pdebug.Printf("background writer: failed to connect to %s:%s", m.network, m.address)
@@ -531,4 +523,32 @@ func (m *minion) pendingAvailable(threshold int) bool {
 		return true
 	}
 	return false
+}
+
+func (m *minion) connect(ctx context.Context) net.Conn {
+	retryCtx, cancel := context.WithTimeout(ctx, m.dialTimeout)
+	defer cancel()
+
+	b, backoffCancel := m.backoffPolicy.Start(retryCtx)
+	defer backoffCancel()
+
+	for {
+		conn, err := dial(ctx, m.network, m.address, m.dialTimeout)
+		if err == nil {
+			if pdebug.Enabled {
+				pdebug.Printf("connected to server!")
+			}
+			return conn
+		}
+
+		if pdebug.Enabled {
+			pdebug.Printf("failed to connect to server, backing off...")
+		}
+		select {
+		case <-b.Done():
+			return nil
+		case <-b.Next():
+		}
+	}
+	return nil
 }
