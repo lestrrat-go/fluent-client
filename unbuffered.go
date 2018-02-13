@@ -115,6 +115,14 @@ func (c *Unbuffered) connect(force bool) (net.Conn, error) {
 	return conn, nil
 }
 
+func (c *Unbuffered) serialize(msg *Message) ([]byte, error) {
+	if p := c.tagPrefix; len(p) > 0 {
+		msg.Tag = p + "." + msg.Tag
+	}
+
+	return c.marshaler.Marshal(msg)
+}
+
 // Post posts the given structure after encoding it along with the given tag.
 //
 // If you would like to specify options to `Post()`, you may pass them at the
@@ -143,7 +151,7 @@ func (c *Unbuffered) Post(tag string, v interface{}, options ...Option) (err err
 	msg := makeMessage(tag, v, t, c.subsecond, false)
 	defer releaseMessage(msg)
 
-	serialized, err := c.marshaler.Marshal(msg)
+	serialized, err := c.serialize(msg)
 	if err != nil {
 		return errors.Wrap(err, `failed to serialize payload`)
 	}
