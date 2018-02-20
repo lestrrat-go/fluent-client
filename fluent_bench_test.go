@@ -7,7 +7,7 @@ import (
 
 	official "github.com/fluent/fluent-logger-golang/fluent"
 	k0kubun "github.com/k0kubun/fluent-logger-go"
-	lestrrat "github.com/lestrrat/go-fluent-client"
+	lestrrat "github.com/lestrrat-go/fluent-client"
 )
 
 const tag = "debug.test"

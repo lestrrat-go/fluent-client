@@ -1,7 +1,7 @@
 package fluent
 
 import (
-	msgpack "github.com/lestrrat/go-msgpack"
+	msgpack "github.com/lestrrat-go/msgpack"
 )
 
 type marshalFunc func(*Message) ([]byte, error)

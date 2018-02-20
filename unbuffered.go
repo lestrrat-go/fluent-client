@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	pdebug "github.com/lestrrat/go-pdebug"
+	pdebug "github.com/lestrrat-go/pdebug"
 	"github.com/pkg/errors"
 )
 

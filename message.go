@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	msgpack "github.com/lestrrat/go-msgpack"
-	pdebug "github.com/lestrrat/go-pdebug"
+	msgpack "github.com/lestrrat-go/msgpack"
+	pdebug "github.com/lestrrat-go/pdebug"
 	"github.com/pkg/errors"
 )
 
