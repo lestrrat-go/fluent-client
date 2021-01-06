@@ -122,7 +122,7 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 }
 
 // EncodeMsgpack serializes a Message to msgpack format
-func (m *Message) EncodeMsgpack(e *msgpack.Encoder) error {
+func (m *Message) EncodeMsgpack(e msgpack.Encoder) error {
 	if err := e.EncodeArrayHeader(4); err != nil {
 		return errors.Wrap(err, `failed to encode array header`)
 	}
@@ -151,7 +151,7 @@ func (m *Message) EncodeMsgpack(e *msgpack.Encoder) error {
 
 // DecodeMsgpack deserializes from a msgpack buffer and populates
 // a Message struct appropriately
-func (m *Message) DecodeMsgpack(d *msgpack.Decoder) error {
+func (m *Message) DecodeMsgpack(d msgpack.Decoder) error {
 	var l int
 	if err := d.DecodeArrayLength(&l); err != nil {
 		return errors.Wrap(err, `failed to decode msgpack array length`)

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	backoff "github.com/lestrrat-go/backoff"
+	backoff "github.com/lestrrat-go/backoff/v2"
 	pdebug "github.com/lestrrat-go/pdebug"
 	"github.com/pkg/errors"
 )
@@ -73,7 +73,7 @@ type minion struct {
 func newMinion(options ...Option) (*minion, error) {
 	m := &minion{
 		address:         "127.0.0.1:24224",
-		backoffPolicy:   backoff.NewExponential(),
+		backoffPolicy:   backoff.Exponential(),
 		bufferLimit:     8 * 1024 * 1024,
 		cond:            sync.NewCond(&sync.Mutex{}),
 		dialTimeout:     3 * time.Second,
@@ -529,9 +529,7 @@ func (m *minion) connect(ctx context.Context) net.Conn {
 	retryCtx, cancel := context.WithTimeout(ctx, m.dialTimeout)
 	defer cancel()
 
-	b, backoffCancel := m.backoffPolicy.Start(retryCtx)
-	defer backoffCancel()
-
+	b := m.backoffPolicy.Start(retryCtx)
 	for {
 		conn, err := dial(ctx, m.network, m.address, m.dialTimeout)
 		if err == nil {

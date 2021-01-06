@@ -15,7 +15,7 @@ func init() {
 
 // DecodeMsgpack decodes from a msgpack stream and materializes
 // a EventTime object
-func (t *EventTime) DecodeMsgpack(d *msgpack.Decoder) error {
+func (t *EventTime) DecodeMsgpack(d msgpack.Decoder) error {
 	r := d.Reader()
 
 	sec, err := r.ReadUint32()
@@ -33,7 +33,7 @@ func (t *EventTime) DecodeMsgpack(d *msgpack.Decoder) error {
 }
 
 // EncodeMsgpack encodes the EventTime into msgpack format
-func (t EventTime) EncodeMsgpack(e *msgpack.Encoder) error {
+func (t EventTime) EncodeMsgpack(e msgpack.Encoder) error {
 	w := e.Writer()
 	if err := w.WriteUint32(uint32(t.Unix())); err != nil {
 		return errors.Wrap(err, `failed to write EventTime seconds payload`)
