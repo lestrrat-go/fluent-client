@@ -7,26 +7,6 @@ import (
 	"time"
 )
 
-const (
-	optkeyAddress         = "address"
-	optkeyBuffered        = "buffered"
-	optkeyBufferLimit     = "buffer_limit"
-	optkeyContext         = "context"
-	optkeyConnectOnStart  = "connect_on_start"
-	optkeyDialTimeout     = "dial_timeout"
-	optkeyMarshaler       = "marshaler"
-	optkeyMaxConnAttempts = "max_conn_attempts"
-	optkeyNetwork         = "network"
-	optkeyPingInterval    = "ping_interval"
-	optkeyPingResultChan  = "ping_result_chan"
-	optkeySubSecond       = "subsecond"
-	optkeySyncAppend      = "sync_append"
-	optkeyTagPrefix       = "tag_prefix"
-	optkeyTimestamp       = "timestamp"
-	optkeyWriteQueueSize  = "write_queue_size"
-	optkeyWriteThreshold  = "write_threshold"
-)
-
 type marshaler interface {
 	Marshal(*Message) ([]byte, error)
 }
@@ -41,6 +21,7 @@ type Client interface {
 	Shutdown(context.Context) error
 }
 
+//nolint:maligned
 // Buffered is a Client that buffers incoming messages, and sends them
 // asynchrnously when it can.
 type Buffered struct {
@@ -65,13 +46,6 @@ type Unbuffered struct {
 	subsecond       bool
 	tagPrefix       string
 	writeTimeout    time.Duration
-}
-
-// Option is an interface used for providing options to the
-// various methods
-type Option interface {
-	Name() string
-	Value() interface{}
 }
 
 // Message is a fluentd's payload, which can be encoded in JSON or MessagePack

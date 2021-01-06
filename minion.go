@@ -2,11 +2,12 @@ package fluent
 
 import (
 	"context"
+	"io"
 	"net"
 	"sync"
 	"time"
 
-	backoff "github.com/lestrrat-go/backoff"
+	backoff "github.com/lestrrat-go/backoff/v2"
 	pdebug "github.com/lestrrat-go/pdebug"
 	"github.com/pkg/errors"
 )
@@ -73,7 +74,7 @@ type minion struct {
 func newMinion(options ...Option) (*minion, error) {
 	m := &minion{
 		address:         "127.0.0.1:24224",
-		backoffPolicy:   backoff.NewExponential(),
+		backoffPolicy:   backoff.Exponential(),
 		bufferLimit:     8 * 1024 * 1024,
 		cond:            sync.NewCond(&sync.Mutex{}),
 		dialTimeout:     3 * time.Second,
@@ -90,8 +91,8 @@ func newMinion(options ...Option) (*minion, error) {
 	var writeQueueSize = 64
 	var connectOnStart bool
 	for _, opt := range options {
-		switch opt.Name() {
-		case optkeyNetwork:
+		switch opt.Ident() {
+		case identNetwork{}:
 			v := opt.Value().(string)
 			switch v {
 			case "tcp", "unix":
@@ -99,23 +100,23 @@ func newMinion(options ...Option) (*minion, error) {
 				return nil, errors.Errorf(`invalid network type: %s`, v)
 			}
 			m.network = v
-		case optkeyAddress:
+		case identAddress{}:
 			m.address = opt.Value().(string)
-		case optkeyBufferLimit:
+		case identBufferLimit{}:
 			m.bufferLimit = opt.Value().(int)
-		case optkeyDialTimeout:
+		case identDialTimeout{}:
 			m.dialTimeout = opt.Value().(time.Duration)
-		case optkeyMarshaler:
+		case identMarshaler{}:
 			m.marshaler = opt.Value().(marshaler)
-		case optkeyMaxConnAttempts:
+		case identMaxConnAttempts{}:
 			m.maxConnAttempts = opt.Value().(uint64)
-		case optkeyTagPrefix:
+		case identTagPrefix{}:
 			m.tagPrefix = opt.Value().(string)
-		case optkeyWriteQueueSize:
+		case identWriteQueueSize{}:
 			writeQueueSize = opt.Value().(int)
-		case optkeyWriteThreshold:
+		case identWriteThreshold{}:
 			m.writeThreshold = opt.Value().(int)
-		case optkeyConnectOnStart:
+		case identConnectOnStart{}:
 			connectOnStart = opt.Value().(bool)
 		}
 	}
@@ -174,7 +175,7 @@ func (m *minion) runReader(ctx context.Context) {
 			}
 		case msg, ok := <-m.pingCh:
 			if msg != nil {
-				m.ping(msg)
+				_ = m.ping(msg)
 			}
 			if !ok {
 				loop = false
@@ -187,7 +188,7 @@ func (m *minion) runReader(ctx context.Context) {
 		if pdebug.Enabled {
 			pdebug.Printf("background reader: flushing incoming pings (%d left)", len(m.pingCh))
 		}
-		m.ping(<-m.pingCh)
+		_ = m.ping(<-m.pingCh)
 	}
 
 	for len(m.incoming) > 0 {
@@ -196,7 +197,6 @@ func (m *minion) runReader(ctx context.Context) {
 		}
 		m.appendMessage(<-m.incoming)
 	}
-
 }
 
 // ping is a one-shot deal. we connect, we send, we bail out.
@@ -348,9 +348,7 @@ func (m *minion) runWriter(ctx context.Context) {
 
 	for {
 		// Wait for the reader to notify us
-		if err := m.waitPending(ctx); err != nil {
-			return
-		}
+		m.waitPending(ctx)
 
 		// if we're not connected, we should do that now.
 		// there are two cases where we can get to this point.
@@ -405,9 +403,9 @@ func (m *minion) runWriter(ctx context.Context) {
 			if pdebug.Enabled {
 				pdebug.Printf("background writer: in flush mode, no deadline set")
 			}
-			conn.SetWriteDeadline(time.Time{})
+			_ = conn.SetWriteDeadline(time.Time{})
 		} else {
-			conn.SetWriteDeadline(time.Now().Add(m.writeTimeout))
+			_ = conn.SetWriteDeadline(time.Now().Add(m.writeTimeout))
 		}
 
 		if err := m.flushPending(conn); err != nil {
@@ -426,13 +424,13 @@ func (m *minion) runWriter(ctx context.Context) {
 	}
 }
 
-func (m *minion) waitPending(ctx context.Context) error {
+func (m *minion) waitPending(ctx context.Context) {
 	// We need to check for ctx.Done() here before getting into
 	// the cond loop, because otherwise we might never be woken
 	// up again
 	select {
 	case <-ctx.Done():
-		return nil
+		return
 	default:
 	}
 
@@ -449,16 +447,15 @@ func (m *minion) waitPending(ctx context.Context) error {
 			if pdebug.Enabled {
 				pdebug.Printf("background writer: cancel detected")
 			}
-			return nil
+			return
 		default:
 		}
 
 		m.cond.Wait()
 	}
-	return nil
 }
 
-func (m *minion) flushPending(conn net.Conn) error {
+func (m *minion) flushPending(conn io.Writer) error {
 	var writeiters int
 	var wrotebytes int
 	if pdebug.Enabled {
@@ -486,7 +483,7 @@ func (m *minion) flushPending(conn net.Conn) error {
 	return nil
 }
 
-func (m *minion) writePending(conn net.Conn) (int, error) {
+func (m *minion) writePending(conn io.Writer) (int, error) {
 	m.muPending.Lock()
 	defer m.muPending.Unlock()
 	if pdebug.Enabled {
@@ -529,10 +526,8 @@ func (m *minion) connect(ctx context.Context) net.Conn {
 	retryCtx, cancel := context.WithTimeout(ctx, m.dialTimeout)
 	defer cancel()
 
-	b, backoffCancel := m.backoffPolicy.Start(retryCtx)
-	defer backoffCancel()
-
-	for {
+	b := m.backoffPolicy.Start(retryCtx)
+	for backoff.Continue(b) {
 		conn, err := dial(ctx, m.network, m.address, m.dialTimeout)
 		if err == nil {
 			if pdebug.Enabled {
@@ -543,11 +538,6 @@ func (m *minion) connect(ctx context.Context) net.Conn {
 
 		if pdebug.Enabled {
 			pdebug.Printf("failed to connect to server, backing off...")
-		}
-		select {
-		case <-b.Done():
-			return nil
-		case <-b.Next():
 		}
 	}
 	return nil

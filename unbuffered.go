@@ -40,16 +40,16 @@ func NewUnbuffered(options ...Option) (client *Unbuffered, err error) {
 
 	var connectOnStart bool
 	for _, opt := range options {
-		switch opt.Name() {
-		case optkeyAddress:
+		switch opt.Ident() {
+		case identAddress{}:
 			c.address = opt.Value().(string)
-		case optkeyDialTimeout:
+		case identDialTimeout{}:
 			c.dialTimeout = opt.Value().(time.Duration)
-		case optkeyMarshaler:
+		case identMarshaler{}:
 			c.marshaler = opt.Value().(marshaler)
-		case optkeyMaxConnAttempts:
+		case identMaxConnAttempts{}:
 			c.maxConnAttempts = opt.Value().(uint64)
-		case optkeyNetwork:
+		case identNetwork{}:
 			v := opt.Value().(string)
 			switch v {
 			case "tcp", "unix":
@@ -57,11 +57,11 @@ func NewUnbuffered(options ...Option) (client *Unbuffered, err error) {
 				return nil, errors.Errorf(`invalid network type: %s`, v)
 			}
 			c.network = v
-		case optkeySubSecond:
+		case identSubSecond{}:
 			c.subsecond = opt.Value().(bool)
-		case optkeyTagPrefix:
+		case identTagPrefix{}:
 			c.tagPrefix = opt.Value().(string)
-		case optkeyConnectOnStart:
+		case identConnectOnStart{}:
 			connectOnStart = opt.Value().(bool)
 		}
 	}
@@ -138,8 +138,8 @@ func (c *Unbuffered) Post(tag string, v interface{}, options ...Option) (err err
 
 	var t time.Time
 	for _, opt := range options {
-		switch opt.Name() {
-		case optkeyTimestamp:
+		switch opt.Ident() {
+		case identTimestamp{}:
 			t = opt.Value().(time.Time)
 		}
 	}

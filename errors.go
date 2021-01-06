@@ -21,8 +21,6 @@ func IsBufferFull(e error) bool {
 		if cerr, ok := e.(causer); ok {
 			e = cerr.Cause()
 		}
-
-		e = nil
 	}
 	return false
 }

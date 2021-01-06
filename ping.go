@@ -17,10 +17,10 @@ func Ping(ctx context.Context, client Client, tag string, record interface{}, op
 	var replyCh chan error
 
 	for _, option := range options {
-		switch option.Name() {
-		case optkeyPingInterval:
+		switch option.Ident() {
+		case identPingInterval{}:
 			interval = option.Value().(time.Duration)
-		case optkeyPingResultChan:
+		case identPingResultChan{}:
 			replyCh = option.Value().(chan error)
 		}
 	}
