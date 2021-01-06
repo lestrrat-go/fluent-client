@@ -1,0 +1,56 @@
+run:
+  skip-dirs: internal
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - shadow
+
+linters:
+  enable-all: true
+  disable:
+    - dupl
+    - exhaustive
+    - exhaustivestruct
+    - errorlint
+    - funlen
+    - gci
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - gocritic
+    - gocyclo
+    - godot
+    - godox
+    - goerr113
+    - gofumpt
+    - gomnd
+    - gosec
+    - lll
+    - makezero
+    - nakedret
+    - nestif
+    - nlreturn
+    - paralleltest
+    - testpackage
+    - thelper
+    - unconvert
+    - wrapcheck
+    - wsl
+
+issues:
+  exclude-rules:
+    - path: /*_test.go
+      linters:
+        - errcheck
+    - path: /*_example_test.go
+      linters:
+        - forbidigo
+
+  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  max-same-issues: 0
+
