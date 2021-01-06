@@ -7,26 +7,6 @@ import (
 	"time"
 )
 
-const (
-	optkeyAddress         = "address"
-	optkeyBuffered        = "buffered"
-	optkeyBufferLimit     = "buffer_limit"
-	optkeyContext         = "context"
-	optkeyConnectOnStart  = "connect_on_start"
-	optkeyDialTimeout     = "dial_timeout"
-	optkeyMarshaler       = "marshaler"
-	optkeyMaxConnAttempts = "max_conn_attempts"
-	optkeyNetwork         = "network"
-	optkeyPingInterval    = "ping_interval"
-	optkeyPingResultChan  = "ping_result_chan"
-	optkeySubSecond       = "subsecond"
-	optkeySyncAppend      = "sync_append"
-	optkeyTagPrefix       = "tag_prefix"
-	optkeyTimestamp       = "timestamp"
-	optkeyWriteQueueSize  = "write_queue_size"
-	optkeyWriteThreshold  = "write_threshold"
-)
-
 type marshaler interface {
 	Marshal(*Message) ([]byte, error)
 }
