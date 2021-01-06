@@ -38,8 +38,8 @@ func NewBuffered(options ...Option) (client *Buffered, err error) {
 
 	var subsecond bool
 	for _, opt := range options {
-		switch opt.Name() {
-		case optkeySubSecond:
+		switch opt.Ident() {
+		case identSubSecond{}:
 			subsecond = opt.Value().(bool)
 		}
 	}
@@ -91,14 +91,14 @@ func (c *Buffered) Post(tag string, v interface{}, options ...Option) (err error
 	var t time.Time
 	var ctx = context.Background()
 	for _, opt := range options {
-		switch opt.Name() {
-		case optkeyTimestamp:
+		switch opt.Ident() {
+		case identTimestamp{}:
 			t = opt.Value().(time.Time)
-		case optkeySyncAppend:
+		case identSyncAppend{}:
 			syncAppend = opt.Value().(bool)
-		case optkeySubSecond:
+		case identSubSecond{}:
 			subsecond = opt.Value().(bool)
-		case optkeyContext:
+		case identContext{}:
 			if pdebug.Enabled {
 				pdebug.Printf("client: using user-supplied context")
 			}
@@ -221,12 +221,12 @@ func (c *Buffered) Ping(tag string, record interface{}, options ...Option) (err 
 	var subsecond bool
 	var t time.Time
 	for _, opt := range options {
-		switch opt.Name() {
-		case optkeySubSecond:
+		switch opt.Ident() {
+		case identSubSecond{}:
 			subsecond = opt.Value().(bool)
-		case optkeyTimestamp:
+		case identTimestamp{}:
 			t = opt.Value().(time.Time)
-		case optkeyContext:
+		case identContext{}:
 			if pdebug.Enabled {
 				pdebug.Printf("client: using user-supplied context")
 			}

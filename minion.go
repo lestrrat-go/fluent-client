@@ -91,8 +91,8 @@ func newMinion(options ...Option) (*minion, error) {
 	var writeQueueSize = 64
 	var connectOnStart bool
 	for _, opt := range options {
-		switch opt.Name() {
-		case optkeyNetwork:
+		switch opt.Ident() {
+		case identNetwork{}:
 			v := opt.Value().(string)
 			switch v {
 			case "tcp", "unix":
@@ -100,23 +100,23 @@ func newMinion(options ...Option) (*minion, error) {
 				return nil, errors.Errorf(`invalid network type: %s`, v)
 			}
 			m.network = v
-		case optkeyAddress:
+		case identAddress{}:
 			m.address = opt.Value().(string)
-		case optkeyBufferLimit:
+		case identBufferLimit{}:
 			m.bufferLimit = opt.Value().(int)
-		case optkeyDialTimeout:
+		case identDialTimeout{}:
 			m.dialTimeout = opt.Value().(time.Duration)
-		case optkeyMarshaler:
+		case identMarshaler{}:
 			m.marshaler = opt.Value().(marshaler)
-		case optkeyMaxConnAttempts:
+		case identMaxConnAttempts{}:
 			m.maxConnAttempts = opt.Value().(uint64)
-		case optkeyTagPrefix:
+		case identTagPrefix{}:
 			m.tagPrefix = opt.Value().(string)
-		case optkeyWriteQueueSize:
+		case identWriteQueueSize{}:
 			writeQueueSize = opt.Value().(int)
-		case optkeyWriteThreshold:
+		case identWriteThreshold{}:
 			m.writeThreshold = opt.Value().(int)
-		case optkeyConnectOnStart:
+		case identConnectOnStart{}:
 			connectOnStart = opt.Value().(bool)
 		}
 	}

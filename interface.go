@@ -68,13 +68,6 @@ type Unbuffered struct {
 	writeTimeout    time.Duration
 }
 
-// Option is an interface used for providing options to the
-// various methods
-type Option interface {
-	Name() string
-	Value() interface{}
-}
-
 // Message is a fluentd's payload, which can be encoded in JSON or MessagePack
 // format.
 type Message struct {

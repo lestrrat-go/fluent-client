@@ -10,8 +10,8 @@ package fluent
 func New(options ...Option) (Client, error) {
 	var buffered = true
 	for _, opt := range options {
-		switch opt.Name() {
-		case optkeyBuffered:
+		switch opt.Ident() {
+		case identBuffered{}:
 			buffered = opt.Value().(bool)
 		}
 	}
