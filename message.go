@@ -90,12 +90,16 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 
 	buf.WriteByte('[')
 
-	enc.Encode(m.Tag)
+	if err := enc.Encode(m.Tag); err != nil {
+		return nil, errors.Wrap(err, `failed to encode tag`)
+	}
 	buf.Truncate(buf.Len() - 1)
 
 	buf.WriteByte(',')
 
-	enc.Encode(m.Time.Unix())
+	if err := enc.Encode(m.Time.Unix()); err != nil {
+		return nil, errors.Wrap(err, `failed to encode time`)
+	}
 	buf.Truncate(buf.Len() - 1)
 
 	buf.WriteByte(',')
