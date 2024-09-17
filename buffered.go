@@ -17,6 +17,7 @@ import (
 //   - fluent.WithJSONMarshaler
 //   - fluent.WithMaxConnAttempts
 //   - fluent.WithMsgpackMarshaler
+//   - fluent.WithMarshaller
 //   - fluent.WithNetwork
 //   - fluent.WithTagPrefix
 //   - fluent.WithWriteThreshold
