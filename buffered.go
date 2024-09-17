@@ -11,16 +11,17 @@ import (
 // NewBuffered creates a new Buffered client.
 // Options may be one of the following:
 //
-//   * fluent.WithAddress
-//   * fluent.WithBufferLimit
-//   * fluent.WithDialTimeout
-//   * fluent.WithJSONMarshaler
-//   * fluent.WithMaxConnAttempts
-//   * fluent.WithMsgpackMarshaler
-//   * fluent.WithNetwork
-//   * fluent.WithTagPrefix
-//   * fluent.WithWriteThreshold
-//   * fluent.WithWriteQueueSize
+//   - fluent.WithAddress
+//   - fluent.WithBufferLimit
+//   - fluent.WithDialTimeout
+//   - fluent.WithJSONMarshaler
+//   - fluent.WithMaxConnAttempts
+//   - fluent.WithMsgpackMarshaler
+//   - fluent.WithMarshaller
+//   - fluent.WithNetwork
+//   - fluent.WithTagPrefix
+//   - fluent.WithWriteThreshold
+//   - fluent.WithWriteQueueSize
 //
 // Please see their respective documentation for details.
 func NewBuffered(options ...Option) (client *Buffered, err error) {

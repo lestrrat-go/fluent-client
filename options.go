@@ -56,6 +56,12 @@ func WithJSONMarshaler() Option {
 	return option.New(identMarshaler{}, marshalFunc(jsonMarshal))
 }
 
+// WithMarshaller specifies a custom marshaling to be used when
+// sending messages to fluentd. Used for `fluent.New`
+func WithMarshaller(m marshaler) Option {
+	return option.New(identMarshaler{}, m)
+}
+
 // WithMsgpackMarshaler specifies msgpack marshaling to be used when
 // sending messages to fluentd. Used in `fluent.New`
 func WithMsgpackMarshaler() Option {
