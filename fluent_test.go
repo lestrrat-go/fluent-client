@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -35,7 +34,7 @@ type server struct {
 }
 
 func newServer(useJSON bool) (*server, error) {
-	dir, err := ioutil.TempDir("", "sock-")
+	dir, err := os.MkdirTemp("", "sock-")
 	if err != nil {
 		return nil, errors.Wrap(err, `failed to create temporary directory`)
 	}
@@ -252,12 +251,11 @@ func (s *server) Run(ctx context.Context) {
 
 func TestConnectOnStart(t *testing.T) {
 	for _, buffered := range []bool{true, false} {
-		buffered := buffered
 		t.Run(fmt.Sprintf("failure case, buffered=%t", buffered), func(t *testing.T) {
 			// find a port that is not available (this may be timing dependent)
 			var dialer net.Dialer
-			var port int = 22412
-			for i := 0; i < 1000; i++ {
+			port := 22412
+			for range 1000 {
 				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 				conn, err := dialer.DialContext(ctx, `net`, fmt.Sprintf(`127.0.0.1:%d`, port))
 				cancel()
@@ -295,7 +293,6 @@ func TestConnectOnStart(t *testing.T) {
 	<-s.Ready()
 
 	for _, buffered := range []bool{true, false} {
-		buffered := buffered
 		t.Run(fmt.Sprintf("normal case, buffered=%t", buffered), func(t *testing.T) {
 			client, err := fluent.New(
 				fluent.WithNetwork(s.Network),
@@ -490,7 +487,6 @@ func (msg *badmsgpack) EncodeMsgpack(_ *msgpack.Encoder) error {
 
 func TestPostSync(t *testing.T) {
 	for _, syncAppend := range []bool{true, false} {
-		syncAppend := syncAppend
 		t.Run("sync="+strconv.FormatBool(syncAppend), func(t *testing.T) {
 			s, err := newServer(false)
 			if !assert.NoError(t, err, "newServer should succeed") {
@@ -548,8 +544,8 @@ func TestPostSync(t *testing.T) {
 }
 
 type Payload struct {
-	Foo string `msgpack:"foo" json:"foo"`
-	Bar string `msgpack:"bar" json:"bar"`
+	Foo string `json:"foo" msgpack:"foo"`
+	Bar string `json:"bar" msgpack:"bar"`
 }
 
 func TestPostRoundtrip(t *testing.T) {
@@ -562,7 +558,6 @@ func TestPostRoundtrip(t *testing.T) {
 	}
 
 	for _, buffered := range []bool{true, false} {
-		buffered := buffered
 		t.Run(fmt.Sprintf("buffered=%t", buffered), func(t *testing.T) {
 			var options []fluent.Option
 			if !buffered {
@@ -672,13 +667,12 @@ func TestPostRoundtrip(t *testing.T) {
 
 func TestPing(t *testing.T) {
 	for _, buffered := range []bool{true, false} {
-		buffered := buffered
 		t.Run(fmt.Sprintf("buffered=%t", buffered), func(t *testing.T) {
 			t.Run("Ping with no server", func(t *testing.T) {
 				// find a port that is not available (this may be timing dependent)
 				var dialer net.Dialer
-				var port int = 22412
-				for i := 0; i < 1000; i++ {
+				port := 22412
+				for range 1000 {
 					ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 					conn, err := dialer.DialContext(ctx, `net`, fmt.Sprintf(`127.0.0.1:%d`, port))
 					cancel()

@@ -16,6 +16,7 @@ func Ping(ctx context.Context, client Client, tag string, record interface{}, op
 	var interval = 5 * time.Minute
 	var replyCh chan error
 
+	//nolint:forcetypeassert
 	for _, option := range options {
 		switch option.Ident() {
 		case identPingInterval{}:

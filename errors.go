@@ -1,7 +1,8 @@
 package fluent
 
-type bufferFullErr struct{}
-type bufferFuller interface {
+//nolint:errname
+type errBufferFull struct{}
+type errBufferFuller interface {
 	BufferFull() bool
 }
 type causer interface {
@@ -9,12 +10,12 @@ type causer interface {
 }
 
 // Just need one instance
-var bufferFullErrInstance bufferFullErr
+var errBufferFullInstance errBufferFull
 
 // IsBufferFull returns true if the error is a BufferFull error
 func IsBufferFull(e error) bool {
 	for e != nil {
-		if berr, ok := e.(bufferFuller); ok {
+		if berr, ok := e.(errBufferFuller); ok {
 			return berr.BufferFull()
 		}
 
@@ -25,10 +26,10 @@ func IsBufferFull(e error) bool {
 	return false
 }
 
-func (e *bufferFullErr) BufferFull() bool {
+func (e *errBufferFull) BufferFull() bool {
 	return true
 }
 
-func (e *bufferFullErr) Error() string {
+func (e *errBufferFull) Error() string {
 	return `buffer full`
 }

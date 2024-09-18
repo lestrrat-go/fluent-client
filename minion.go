@@ -90,6 +90,7 @@ func newMinion(options ...Option) (*minion, error) {
 
 	var writeQueueSize = 64
 	var connectOnStart bool
+	//nolint:forcetypeassert
 	for _, opt := range options {
 		switch opt.Ident() {
 		case identNetwork{}:
@@ -306,7 +307,7 @@ func (m *minion) appendMessage(msg *Message) {
 			if pdebug.Enabled {
 				pdebug.Printf("background reader: replying error to client")
 			}
-			msg.replyCh <- &bufferFullErrInstance
+			msg.replyCh <- &errBufferFullInstance
 		}
 		return
 	}

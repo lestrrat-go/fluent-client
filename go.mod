@@ -1,6 +1,6 @@
 module github.com/lestrrat-go/fluent-client
 
-go 1.23.1
+go 1.22.7
 
 require (
 	github.com/lestrrat-go/backoff/v2 v2.0.8

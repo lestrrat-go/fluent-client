@@ -11,16 +11,16 @@ import (
 // NewBuffered creates a new Buffered client.
 // Options may be one of the following:
 //
-//   * fluent.WithAddress
-//   * fluent.WithBufferLimit
-//   * fluent.WithDialTimeout
-//   * fluent.WithJSONMarshaler
-//   * fluent.WithMaxConnAttempts
-//   * fluent.WithMsgpackMarshaler
-//   * fluent.WithNetwork
-//   * fluent.WithTagPrefix
-//   * fluent.WithWriteThreshold
-//   * fluent.WithWriteQueueSize
+//   - fluent.WithAddress
+//   - fluent.WithBufferLimit
+//   - fluent.WithDialTimeout
+//   - fluent.WithJSONMarshaler
+//   - fluent.WithMaxConnAttempts
+//   - fluent.WithMsgpackMarshaler
+//   - fluent.WithNetwork
+//   - fluent.WithTagPrefix
+//   - fluent.WithWriteThreshold
+//   - fluent.WithWriteQueueSize
 //
 // Please see their respective documentation for details.
 func NewBuffered(options ...Option) (client *Buffered, err error) {
@@ -37,6 +37,7 @@ func NewBuffered(options ...Option) (client *Buffered, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var subsecond bool
+	//nolint:forcetypeassert
 	for _, opt := range options {
 		switch opt.Ident() {
 		case identSubSecond{}:
@@ -62,17 +63,16 @@ func NewBuffered(options ...Option) (client *Buffered, err error) {
 // If you would like to specify options to `Post()`, you may pass them at the end of
 // the method. Currently you can use the following:
 //
-//   fluent.WithContext: specify context.Context to use
-//   fluent.WithTimestamp: allows you to set arbitrary timestamp values
-//   fluent.WithSyncAppend: allows you to verify if the append was successful
+//	fluent.WithContext: specify context.Context to use
+//	fluent.WithTimestamp: allows you to set arbitrary timestamp values
+//	fluent.WithSyncAppend: allows you to verify if the append was successful
 //
 // If fluent.WithSyncAppend is provide and is true, the following errors
 // may be returned:
 //
-//   1. If the current underlying pending buffer is is not large enough to
-//      hold this new data, an error will be returned
-//   2. If the marshaling into msgpack/json failed, it is returned
-//
+//  1. If the current underlying pending buffer is not large enough to
+//     hold this new data, an error will be returned
+//  2. If the marshaling into msgpack/json failed, it is returned
 func (c *Buffered) Post(tag string, v interface{}, options ...Option) (err error) {
 	if pdebug.Enabled {
 		g := pdebug.Marker("fluent.Buffered.Post").BindError(&err)
@@ -90,6 +90,7 @@ func (c *Buffered) Post(tag string, v interface{}, options ...Option) (err error
 	var subsecond = c.subsecond
 	var t time.Time
 	var ctx = context.Background()
+	//nolint:forcetypeassert
 	for _, opt := range options {
 		switch opt.Ident() {
 		case identTimestamp{}:
@@ -102,6 +103,7 @@ func (c *Buffered) Post(tag string, v interface{}, options ...Option) (err error
 			if pdebug.Enabled {
 				pdebug.Printf("client: using user-supplied context")
 			}
+			//nolint:fatcontext
 			ctx = opt.Value().(context.Context)
 		}
 	}
@@ -220,6 +222,7 @@ func (c *Buffered) Ping(tag string, record interface{}, options ...Option) (err 
 	var ctx = context.Background()
 	var subsecond bool
 	var t time.Time
+	//nolint:forcetypeassert
 	for _, opt := range options {
 		switch opt.Ident() {
 		case identSubSecond{}:
@@ -230,6 +233,7 @@ func (c *Buffered) Ping(tag string, record interface{}, options ...Option) (err 
 			if pdebug.Enabled {
 				pdebug.Printf("client: using user-supplied context")
 			}
+			//nolint:fatcontext
 			ctx = opt.Value().(context.Context)
 		}
 	}
