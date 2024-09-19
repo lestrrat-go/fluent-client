@@ -255,7 +255,8 @@ func TestConnectOnStart(t *testing.T) {
 			// find a port that is not available (this may be timing dependent)
 			var dialer net.Dialer
 			port := 22412
-			for range 1000 {
+			//nolint:intrange
+			for i := 0; i < 1000; i++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 				conn, err := dialer.DialContext(ctx, `net`, fmt.Sprintf(`127.0.0.1:%d`, port))
 				cancel()
@@ -672,7 +673,8 @@ func TestPing(t *testing.T) {
 				// find a port that is not available (this may be timing dependent)
 				var dialer net.Dialer
 				port := 22412
-				for range 1000 {
+				//nolint:intrange
+				for i := 0; i < 1000; i++ {
 					ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 					conn, err := dialer.DialContext(ctx, `net`, fmt.Sprintf(`127.0.0.1:%d`, port))
 					cancel()
