@@ -21,9 +21,10 @@ type Client interface {
 	Shutdown(context.Context) error
 }
 
-//nolint:maligned
 // Buffered is a Client that buffers incoming messages, and sends them
 // asynchrnously when it can.
+//
+//nolint:maligned
 type Buffered struct {
 	closed       bool
 	minionCancel func()

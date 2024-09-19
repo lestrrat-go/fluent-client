@@ -14,13 +14,13 @@ import (
 // buffered client, an unbuffered client handles the Post() method
 // synchronously, and does not attempt to buffer the payload.
 //
-//    * fluent.WithAddress
-//    * fluent.WithDialTimeout
-//    * fluent.WithMarshaler
-//    * fluent.WithMaxConnAttempts
-//    * fluent.WithNetwork
-//    * fluent.WithSubSecond
-//    * fluent.WithTagPrefix
+//   - fluent.WithAddress
+//   - fluent.WithDialTimeout
+//   - fluent.WithMarshaler
+//   - fluent.WithMaxConnAttempts
+//   - fluent.WithNetwork
+//   - fluent.WithSubSecond
+//   - fluent.WithTagPrefix
 //
 // Please see their respective documentation for details.
 func NewUnbuffered(options ...Option) (client *Unbuffered, err error) {
@@ -39,6 +39,7 @@ func NewUnbuffered(options ...Option) (client *Unbuffered, err error) {
 	}
 
 	var connectOnStart bool
+	//nolint:forcetypeassert
 	for _, opt := range options {
 		switch opt.Ident() {
 		case identAddress{}:
@@ -128,8 +129,7 @@ func (c *Unbuffered) serialize(msg *Message) ([]byte, error) {
 // If you would like to specify options to `Post()`, you may pass them at the
 // end of the method. Currently you can use the following:
 //
-//   fluent.WithTimestamp: allows you to set arbitrary timestamp values
-//
+//	fluent.WithTimestamp: allows you to set arbitrary timestamp values
 func (c *Unbuffered) Post(tag string, v interface{}, options ...Option) (err error) {
 	if pdebug.Enabled {
 		g := pdebug.Marker("fluent.Unbuffered.Post").BindError(&err)
@@ -137,6 +137,7 @@ func (c *Unbuffered) Post(tag string, v interface{}, options ...Option) (err err
 	}
 
 	var t time.Time
+	//nolint:forcetypeassert
 	for _, opt := range options {
 		switch opt.Ident() {
 		case identTimestamp{}:

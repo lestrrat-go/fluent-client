@@ -11,6 +11,7 @@ func allocMessage() interface{} {
 }
 
 func getMessage() *Message {
+	//nolint:forcetypeassert
 	return msgpool.Get().(*Message)
 }
 

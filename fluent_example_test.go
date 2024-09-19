@@ -55,7 +55,7 @@ func ExamplePing() {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// Goroutine to wait for errors
@@ -75,6 +75,7 @@ func ExamplePing() {
 	}()
 
 	go fluent.Ping(ctx, client, "ping", "hostname", fluent.WithPingResultChan(errorCh))
-
 	// Do what you need with your main program...
+
+	// OUTPUT:
 }

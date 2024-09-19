@@ -9,6 +9,7 @@ package fluent
 // respectively.
 func New(options ...Option) (Client, error) {
 	var buffered = true
+	//nolint:forcetypeassert
 	for _, opt := range options {
 		switch opt.Ident() {
 		case identBuffered{}:
